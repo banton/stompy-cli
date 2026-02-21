@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -123,14 +122,9 @@ func (c *Client) UnlockContext(project, topic string, version string, force, noA
 		params.Set("no_archive", "true")
 	}
 
-	data, _, err := c.Do("DELETE", fmt.Sprintf("/projects/%s/contexts/%s", url.PathEscape(project), url.PathEscape(topic)), nil, params)
-	if err != nil {
-		return nil, err
-	}
-
 	var resp ContextDeleteResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, fmt.Errorf("decoding response: %w", err)
+	if err := c.DeleteWithResult(fmt.Sprintf("/projects/%s/contexts/%s", url.PathEscape(project), url.PathEscape(topic)), params, &resp); err != nil {
+		return nil, err
 	}
 	return &resp, nil
 }
@@ -145,12 +139,12 @@ func (c *Client) UpdateContext(project, topic string, req ContextUpdateRequest) 
 
 func (c *Client) SearchContexts(project, query string, limit int) (*ContextListResponse, error) {
 	params := url.Values{}
-	params.Set("q", query)
+	params.Set("search", query)
 	if limit > 0 {
 		params.Set("limit", strconv.Itoa(limit))
 	}
 	var resp ContextListResponse
-	if err := c.Get(fmt.Sprintf("/projects/%s/contexts/search", url.PathEscape(project)), params, &resp); err != nil {
+	if err := c.Get(fmt.Sprintf("/projects/%s/contexts", url.PathEscape(project)), params, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil

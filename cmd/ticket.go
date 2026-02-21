@@ -309,9 +309,6 @@ var ticketBoardCmd = &cobra.Command{
 				}
 				fmt.Printf("  #%-4d [%s] %s%s\n", t.ID, t.Priority, truncate(t.Title, 50), assignee)
 			}
-			if len(col.Tickets) == 0 {
-				fmt.Println("  (empty)")
-			}
 		}
 		fmt.Printf("\nTotal: %d tickets\n", resp.Total)
 		return nil

@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/banton/stompy-cli/internal/api"
@@ -28,12 +29,17 @@ var rootCmd = &cobra.Command{
 	Long:  `A command-line interface for the Stompy API. Manage projects, contexts, and tickets from your terminal.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip auth setup for commands that don't need it
+		cmdPath := cmd.CommandPath() // e.g. "stompy config set", "stompy ticket get"
 		switch cmd.Name() {
-		case "login", "logout", "version", "completion", "bash", "zsh", "fish", "powershell", "set", "get", "show":
+		case "login", "logout", "version", "completion", "bash", "zsh", "fish", "powershell":
+			return config.Load()
+		}
+		// Config subcommands don't need API auth
+		if strings.Contains(cmdPath, "config ") {
 			return config.Load()
 		}
 		// Also skip for parent commands (just groupings)
-		if !cmd.HasParent() || cmd.HasSubCommands() && len(args) == 0 {
+		if !cmd.HasParent() || (cmd.HasSubCommands() && len(args) == 0) {
 			return config.Load()
 		}
 

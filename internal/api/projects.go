@@ -68,5 +68,6 @@ func (c *Client) CreateProject(req ProjectCreate) (*ProjectResponse, error) {
 }
 
 func (c *Client) DeleteProject(name string) error {
-	return c.Delete(fmt.Sprintf("/projects/%s", url.PathEscape(name)), nil)
+	params := url.Values{"confirm": {"true"}}
+	return c.Delete(fmt.Sprintf("/projects/%s", url.PathEscape(name)), params)
 }

@@ -54,7 +54,7 @@ type TicketListResponse struct {
 }
 
 type TicketSearchResponse struct {
-	Results []TicketResponse `json:"results"`
+	Results []TicketResponse `json:"tickets"`
 	Total   int              `json:"total"`
 	Query   string           `json:"query"`
 }
@@ -71,14 +71,14 @@ type BoardView struct {
 }
 
 type LinkCreate struct {
-	TargetID int    `json:"target_ticket_id"`
+	TargetID int    `json:"target_id"`
 	LinkType string `json:"link_type"`
 }
 
 type TicketLinkResp struct {
 	ID           int    `json:"id"`
-	SourceID     int    `json:"source_ticket_id"`
-	TargetID     int    `json:"target_ticket_id"`
+	SourceID     int    `json:"source_id"`
+	TargetID     int    `json:"target_id"`
 	LinkType     string `json:"link_type"`
 	TargetTitle  string `json:"target_title,omitempty"`
 	TargetStatus string `json:"target_status,omitempty"`
@@ -139,7 +139,7 @@ func (c *Client) UpdateTicket(project string, id int, req TicketUpdate) (*Ticket
 func (c *Client) TransitionTicket(project string, id int, status string) (*TicketResponse, error) {
 	body := TransitionRequest{Status: status}
 	var resp TicketResponse
-	if err := c.Post(fmt.Sprintf("/projects/%s/tickets/%d/transition", url.PathEscape(project), id), body, &resp); err != nil {
+	if err := c.Post(fmt.Sprintf("/projects/%s/tickets/%d/move", url.PathEscape(project), id), body, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -147,7 +147,7 @@ func (c *Client) TransitionTicket(project string, id int, status string) (*Ticke
 
 func (c *Client) SearchTickets(project, query string, ticketType, status string, limit int) (*TicketSearchResponse, error) {
 	params := url.Values{}
-	params.Set("q", query)
+	params.Set("query", query)
 	if ticketType != "" {
 		params.Set("type", ticketType)
 	}

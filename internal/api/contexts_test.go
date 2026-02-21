@@ -175,11 +175,11 @@ func TestUpdateContext(t *testing.T) {
 
 func TestSearchContexts(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/projects/proj/contexts/search" {
-			t.Errorf("path = %s, want /projects/proj/contexts/search", r.URL.Path)
+		if r.URL.Path != "/projects/proj/contexts" {
+			t.Errorf("path = %s, want /projects/proj/contexts", r.URL.Path)
 		}
-		if r.URL.Query().Get("q") != "architecture" {
-			t.Errorf("q = %q, want architecture", r.URL.Query().Get("q"))
+		if r.URL.Query().Get("search") != "architecture" {
+			t.Errorf("search = %q, want architecture", r.URL.Query().Get("search"))
 		}
 		json.NewEncoder(w).Encode(ContextListResponse{Total: 2})
 	}))

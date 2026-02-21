@@ -128,8 +128,8 @@ func TestTransitionTicket(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("method = %s, want POST", r.Method)
 		}
-		if r.URL.Path != "/projects/proj/tickets/1/transition" {
-			t.Errorf("path = %s, want /projects/proj/tickets/1/transition", r.URL.Path)
+		if r.URL.Path != "/projects/proj/tickets/1/move" {
+			t.Errorf("path = %s, want /projects/proj/tickets/1/move", r.URL.Path)
 		}
 		body, _ := io.ReadAll(r.Body)
 		json.Unmarshal(body, &gotBody)
@@ -157,13 +157,13 @@ func TestSearchTickets(t *testing.T) {
 		if r.URL.Path != "/projects/proj/tickets/search" {
 			t.Errorf("path = %s, want /projects/proj/tickets/search", r.URL.Path)
 		}
-		if r.URL.Query().Get("q") != "auth" {
-			t.Errorf("q = %q, want auth", r.URL.Query().Get("q"))
+		if r.URL.Query().Get("query") != "auth" {
+			t.Errorf("query = %q, want auth", r.URL.Query().Get("query"))
 		}
-		json.NewEncoder(w).Encode(TicketSearchResponse{
-			Results: []TicketResponse{{ID: 1, Title: "Auth bug", Type: "bug", Status: "open", Priority: "high"}},
-			Total:   1,
-			Query:   "auth",
+		json.NewEncoder(w).Encode(map[string]any{
+			"tickets": []TicketResponse{{ID: 1, Title: "Auth bug", Type: "bug", Status: "open", Priority: "high"}},
+			"total":   1,
+			"query":   "auth",
 		})
 	}))
 	defer srv.Close()

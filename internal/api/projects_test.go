@@ -135,6 +135,9 @@ func TestDeleteProject(t *testing.T) {
 		if r.URL.Path != "/projects/oldproj" {
 			t.Errorf("path = %s, want /projects/oldproj", r.URL.Path)
 		}
+		if r.URL.Query().Get("confirm") != "true" {
+			t.Errorf("confirm = %q, want true", r.URL.Query().Get("confirm"))
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer srv.Close()
