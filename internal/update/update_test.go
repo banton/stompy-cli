@@ -52,6 +52,23 @@ func TestCheckForUpdate_CachedSameVersion(t *testing.T) {
 	}
 }
 
+func TestCheckForUpdate_CachedSameVersionNoPrefix(t *testing.T) {
+	dir := t.TempDir()
+
+	// Cache has "v0.1.0" but current version is "0.1.0" (no v prefix) — should still match
+	cache := VersionCache{
+		LastCheck:     time.Now(),
+		LatestVersion: "v0.1.0",
+	}
+	data, _ := json.Marshal(cache)
+	os.WriteFile(filepath.Join(dir, cacheFileName), data, 0644)
+
+	result := CheckForUpdate("0.1.0", dir)
+	if result != "" {
+		t.Errorf("CheckForUpdate with v-prefix mismatch = %q, want empty", result)
+	}
+}
+
 func TestFindAsset(t *testing.T) {
 	assets := []Asset{
 		{Name: "stompy_v0.2.0_darwin_arm64.tar.gz", BrowserDownloadURL: "https://example.com/darwin_arm64.tar.gz"},

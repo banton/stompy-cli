@@ -51,7 +51,7 @@ func CheckForUpdate(currentVersion, configDir string) string {
 
 	cache := loadCache(configDir)
 	if cache != nil && time.Since(cache.LastCheck) < checkInterval {
-		if cache.LatestVersion != "" && cache.LatestVersion != currentVersion {
+		if cache.LatestVersion != "" && !versionsEqual(cache.LatestVersion, currentVersion) {
 			return cache.LatestVersion
 		}
 		return ""
@@ -81,10 +81,15 @@ func CheckForUpdate(currentVersion, configDir string) string {
 		ReleaseURL:    release.HTMLURL,
 	})
 
-	if release.TagName != currentVersion && release.TagName != "v"+currentVersion {
+	if !versionsEqual(release.TagName, currentVersion) {
 		return release.TagName
 	}
 	return ""
+}
+
+// versionsEqual compares versions ignoring the "v" prefix.
+func versionsEqual(a, b string) bool {
+	return strings.TrimPrefix(a, "v") == strings.TrimPrefix(b, "v")
 }
 
 // GetLatestRelease fetches the latest release info from GitHub.
@@ -114,7 +119,7 @@ func SelfUpdate(currentVersion string) error {
 		return err
 	}
 
-	if release.TagName == currentVersion || release.TagName == "v"+currentVersion {
+	if versionsEqual(release.TagName, currentVersion) {
 		return fmt.Errorf("already at latest version %s", currentVersion)
 	}
 

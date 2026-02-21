@@ -315,6 +315,12 @@ var ticketBoardCmd = &cobra.Command{
 			return err
 		}
 
+		if !isTableOutput() {
+			f := getFormatter()
+			fmt.Print(f.FormatRaw(resp))
+			return nil
+		}
+
 		for _, col := range resp.Columns {
 			header := output.ColorStatus(strings.ToUpper(col.Status))
 			fmt.Printf("\n%s %s\n", header, output.Dim(fmt.Sprintf("(%d)", col.Count)))
