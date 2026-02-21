@@ -290,7 +290,9 @@ var ticketListCmd = &cobra.Command{
 		}
 
 		fmt.Print(f.FormatTable(headers, rows))
-		fmt.Printf("\nTotal: %d tickets\n", resp.Total)
+		if isTableOutput() {
+			fmt.Printf("\nTotal: %d tickets\n", resp.Total)
+		}
 		return nil
 	},
 }
@@ -369,7 +371,9 @@ var ticketSearchCmd = &cobra.Command{
 		}
 
 		fmt.Print(f.FormatTable(headers, rows))
-		fmt.Printf("\nFound: %d tickets\n", resp.Total)
+		if isTableOutput() {
+			fmt.Printf("\nFound: %d tickets\n", resp.Total)
+		}
 		return nil
 	},
 }

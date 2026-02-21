@@ -10,15 +10,18 @@ import (
 	"golang.org/x/term"
 )
 
-// Stompy brand colors (ANSI 256-color approximations)
+// Stompy brand colors using 256-color palette for accurate muted tones.
+// Brand hex → 6x6x6 cube mapping (each component 0–5):
+//   #4A9B9B → (1,3,3)  #D4785A → (4,2,1)  #5B9A6B → (1,3,2)
+//   #D4A85A → (4,3,1)  #C75D5D → (4,1,1)
 var (
-	colorTeal      = text.Colors{text.FgHiCyan}   // Primary — Stompy Teal #4A9B9B
-	colorTerracotta = text.Colors{text.FgHiRed}    // Accent — Terracotta #D4785A
-	colorForest    = text.Colors{text.FgHiGreen}   // Success — Forest #5B9A6B
-	colorAmber     = text.Colors{text.FgHiYellow}  // Warning — Amber #D4A85A
-	colorRust      = text.Colors{text.FgRed}       // Error — Rust #C75D5D
-	colorInk       = text.Colors{text.FgWhite}     // Ink — foreground
-	colorDim       = text.Colors{text.FgHiBlack}   // Muted text
+	colorTeal       = text.Colors{text.Fg256RGB(1, 3, 3)} // Primary — Stompy Teal #4A9B9B (muted)
+	colorTerracotta = text.Colors{text.Fg256RGB(4, 2, 1)} // Accent — Terracotta #D4785A
+	colorForest     = text.Colors{text.Fg256RGB(1, 3, 2)} // Success — Forest #5B9A6B
+	colorAmber      = text.Colors{text.Fg256RGB(4, 3, 1)} // Warning — Amber #D4A85A
+	colorRust       = text.Colors{text.Fg256RGB(4, 1, 1)} // Error — Rust #C75D5D
+	colorInk        = text.Colors{text.FgWhite}            // Ink — foreground
+	colorDim        = text.Colors{text.FgHiBlack}          // Muted text
 )
 
 // TableFormatter renders output as ASCII tables with Stompy brand colors.

@@ -76,7 +76,9 @@ var projectListCmd = &cobra.Command{
 		}
 
 		fmt.Print(f.FormatTable(headers, rows))
-		fmt.Printf("\nTotal: %d projects\n", resp.Total)
+		if isTableOutput() {
+			fmt.Printf("\nTotal: %d projects\n", resp.Total)
+		}
 		return nil
 	},
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/banton/stompy-cli/internal/auth"
 	"github.com/banton/stompy-cli/internal/config"
 	"github.com/banton/stompy-cli/internal/output"
+	"github.com/banton/stompy-cli/internal/update"
 	"github.com/spf13/cobra"
 )
 
@@ -20,7 +21,8 @@ var (
 	flagOutput  string
 	flagVerbose bool
 
-	apiClient *api.Client
+	apiClient        *api.Client
+	updateAvailable  = make(chan string, 1)
 )
 
 var rootCmd = &cobra.Command{
@@ -30,10 +32,18 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true,
 	SilenceUsage:  true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Fire off async version check (non-blocking, result printed in PostRun)
+		go func() {
+			if latest := update.CheckForUpdate(Version, config.GetConfigDir()); latest != "" {
+				updateAvailable <- latest
+			}
+			close(updateAvailable)
+		}()
+
 		// Skip auth setup for commands that don't need it
 		cmdPath := cmd.CommandPath() // e.g. "stompy config set", "stompy ticket get"
 		switch cmd.Name() {
-		case "login", "logout", "version", "completion", "bash", "zsh", "fish", "powershell":
+		case "login", "logout", "version", "update", "completion", "bash", "zsh", "fish", "powershell":
 			return config.Load()
 		}
 		// Config subcommands don't need API auth
@@ -74,7 +84,22 @@ func init() {
 
 // Execute is the main entry point for the CLI.
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	err := rootCmd.Execute()
+
+	// Print update notice (if available) after command output
+	select {
+	case latest := <-updateAvailable:
+		if latest != "" && isTableOutput() {
+			fmt.Fprintf(os.Stderr, "\n%s A new version of stompy is available (%s). Run %s to upgrade.\n",
+				output.Dim("→"),
+				output.Teal(latest),
+				output.Teal("stompy update"))
+		}
+	default:
+		// Check didn't complete in time — skip silently
+	}
+
+	if err != nil {
 		fmt.Fprintln(os.Stderr, output.Error("Error:")+"\n  "+err.Error())
 		os.Exit(1)
 	}

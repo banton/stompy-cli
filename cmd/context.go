@@ -148,7 +148,9 @@ var contextListCmd = &cobra.Command{
 		}
 
 		fmt.Print(f.FormatTable(headers, rows))
-		fmt.Printf("\nTotal: %d contexts\n", resp.Total)
+		if isTableOutput() {
+			fmt.Printf("\nTotal: %d contexts\n", resp.Total)
+		}
 		return nil
 	},
 }
@@ -190,7 +192,9 @@ var contextSearchCmd = &cobra.Command{
 		}
 
 		fmt.Print(f.FormatTable(headers, rows))
-		fmt.Printf("\nFound: %d contexts\n", resp.Total)
+		if isTableOutput() {
+			fmt.Printf("\nFound: %d contexts\n", resp.Total)
+		}
 		return nil
 	},
 }
