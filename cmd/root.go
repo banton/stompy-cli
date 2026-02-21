@@ -40,10 +40,16 @@ var rootCmd = &cobra.Command{
 			close(updateAvailable)
 		}()
 
-		// Skip auth setup for commands that don't need it
-		cmdPath := cmd.CommandPath() // e.g. "stompy config set", "stompy ticket get"
+		// Skip auth setup for commands that don't need it.
+		// Use full command path to avoid matching subcommands with the same name
+		// (e.g. "stompy update" vs "stompy context update").
+		cmdPath := cmd.CommandPath()
+		switch cmdPath {
+		case "stompy login", "stompy logout", "stompy version", "stompy update":
+			return config.Load()
+		}
 		switch cmd.Name() {
-		case "login", "logout", "version", "update", "completion", "bash", "zsh", "fish", "powershell":
+		case "completion", "bash", "zsh", "fish", "powershell":
 			return config.Load()
 		}
 		// Config subcommands don't need API auth
