@@ -162,5 +162,5 @@ func ResolveProject(flagValue string) (string, error) {
 	if dp := GetDefaultProject(); dp != "" {
 		return dp, nil
 	}
-	return "", fmt.Errorf("no project specified: use --project flag, STOMPY_PROJECT env var, or set default_project in config")
+	return "", fmt.Errorf("no project specified. Set a default with:\n  stompy project use <name>\n\nOr pass -p <name> to any command. Run 'stompy project list' to see available projects")
 }

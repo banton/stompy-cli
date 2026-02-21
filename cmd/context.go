@@ -48,7 +48,7 @@ var contextLockCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Context locked: %s (version %s)\n", resp.Topic, resp.Version)
+		fmt.Printf("%s Context locked: %s (version %s)\n", output.Success("✓"), output.Teal(resp.Topic), resp.Version)
 		return nil
 	},
 }
@@ -109,7 +109,7 @@ var contextUnlockCmd = &cobra.Command{
 		if resp.Archived {
 			archivedStr = " (archived)"
 		}
-		fmt.Printf("Context unlocked: %s%s\n", resp.Topic, archivedStr)
+		fmt.Printf("%s Context unlocked: %s%s\n", output.Success("✓"), output.Teal(resp.Topic), archivedStr)
 		return nil
 	},
 }
@@ -224,7 +224,7 @@ var contextUpdateCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Context updated: %s (version %s)\n", resp.Topic, resp.Version)
+		fmt.Printf("%s Context updated: %s (version %s)\n", output.Success("✓"), output.Teal(resp.Topic), resp.Version)
 		return nil
 	},
 }
@@ -249,7 +249,7 @@ var contextMoveCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Context %q moved to project %q\n", resp.Topic, resp.TargetProject)
+		fmt.Printf("%s Context %s moved to project %s\n", output.Success("✓"), output.Teal(resp.Topic), output.Teal(resp.TargetProject))
 		return nil
 	},
 }

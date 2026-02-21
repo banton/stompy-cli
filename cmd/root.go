@@ -24,9 +24,11 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "stompy",
-	Short: "Stompy CLI — manage projects, contexts, and tickets",
-	Long:  `A command-line interface for the Stompy API. Manage projects, contexts, and tickets from your terminal.`,
+	Use:           "stompy",
+	Short:         "Stompy CLI — manage projects, contexts, and tickets",
+	Long:          `A command-line interface for the Stompy API. Manage projects, contexts, and tickets from your terminal.`,
+	SilenceErrors: true,
+	SilenceUsage:  true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip auth setup for commands that don't need it
 		cmdPath := cmd.CommandPath() // e.g. "stompy config set", "stompy ticket get"
@@ -73,6 +75,7 @@ func init() {
 // Execute is the main entry point for the CLI.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, output.Error("Error:")+"\n  "+err.Error())
 		os.Exit(1)
 	}
 }
@@ -131,9 +134,19 @@ func getProject() (string, error) {
 
 // getFormatter returns the output formatter based on flags and config.
 func getFormatter() output.Formatter {
-	format := flagOutput
-	if format == "" {
-		format = config.GetOutputFormat()
+	return output.NewFormatter(getOutputFormat())
+}
+
+// getOutputFormat returns the resolved output format string.
+func getOutputFormat() string {
+	if flagOutput != "" {
+		return flagOutput
 	}
-	return output.NewFormatter(format)
+	return config.GetOutputFormat()
+}
+
+// isTableOutput returns true when output format is table (colors allowed).
+func isTableOutput() bool {
+	f := getOutputFormat()
+	return f == "" || f == "table"
 }

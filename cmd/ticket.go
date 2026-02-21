@@ -59,7 +59,7 @@ var ticketCreateCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Ticket #%d created: %s\n", resp.ID, resp.Title)
+		fmt.Printf("%s Ticket #%d created: %s\n", output.Success("✓"), resp.ID, resp.Title)
 		return nil
 	},
 }
@@ -85,12 +85,18 @@ var ticketGetCmd = &cobra.Command{
 		}
 
 		f := getFormatter()
+		tType, tStatus, tPriority := resp.Type, resp.Status, resp.Priority
+		if isTableOutput() {
+			tType = output.ColorType(tType)
+			tStatus = output.ColorStatus(tStatus)
+			tPriority = output.ColorPriority(tPriority)
+		}
 		fields := []output.KeyValue{
 			{Key: "ID", Value: fmt.Sprintf("%d", resp.ID)},
 			{Key: "Title", Value: resp.Title},
-			{Key: "Type", Value: resp.Type},
-			{Key: "Status", Value: resp.Status},
-			{Key: "Priority", Value: resp.Priority},
+			{Key: "Type", Value: tType},
+			{Key: "Status", Value: tStatus},
+			{Key: "Priority", Value: tPriority},
 		}
 		if resp.Description != nil {
 			fields = append(fields, output.KeyValue{Key: "Description", Value: *resp.Description})
@@ -159,7 +165,7 @@ var ticketUpdateCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Ticket #%d updated: %s\n", resp.ID, resp.Title)
+		fmt.Printf("%s Ticket #%d updated: %s\n", output.Success("✓"), resp.ID, resp.Title)
 		return nil
 	},
 }
@@ -189,7 +195,7 @@ var ticketMoveCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Ticket #%d moved to %q\n", resp.ID, resp.Status)
+		fmt.Printf("%s Ticket #%d moved to %s\n", output.Success("✓"), resp.ID, output.ColorStatus(resp.Status))
 		return nil
 	},
 }
@@ -233,7 +239,7 @@ var ticketCloseCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Ticket #%d closed (%s -> %s)\n", resp.ID, ticket.Status, resp.Status)
+		fmt.Printf("%s Ticket #%d closed (%s → %s)\n", output.Success("✓"), resp.ID, output.ColorStatus(ticket.Status), output.ColorStatus(resp.Status))
 		return nil
 	},
 }
@@ -259,6 +265,7 @@ var ticketListCmd = &cobra.Command{
 		}
 
 		f := getFormatter()
+		colorize := isTableOutput()
 		headers := []string{"ID", "TYPE", "STATUS", "PRIORITY", "TITLE", "ASSIGNEE"}
 		var rows [][]string
 		for _, t := range resp.Tickets {
@@ -266,11 +273,17 @@ var ticketListCmd = &cobra.Command{
 			if t.Assignee != nil {
 				assignee = *t.Assignee
 			}
+			tType, tStatus, tPriority := t.Type, t.Status, t.Priority
+			if colorize {
+				tType = output.ColorType(tType)
+				tStatus = output.ColorStatus(tStatus)
+				tPriority = output.ColorPriority(tPriority)
+			}
 			rows = append(rows, []string{
 				fmt.Sprintf("%d", t.ID),
-				t.Type,
-				t.Status,
-				t.Priority,
+				tType,
+				tStatus,
+				tPriority,
 				truncate(t.Title, 50),
 				assignee,
 			})
@@ -301,16 +314,17 @@ var ticketBoardCmd = &cobra.Command{
 		}
 
 		for _, col := range resp.Columns {
-			fmt.Printf("\n=== %s (%d) ===\n", strings.ToUpper(col.Status), col.Count)
+			header := output.ColorStatus(strings.ToUpper(col.Status))
+			fmt.Printf("\n%s %s\n", header, output.Dim(fmt.Sprintf("(%d)", col.Count)))
 			for _, t := range col.Tickets {
 				assignee := ""
 				if t.Assignee != nil {
-					assignee = fmt.Sprintf(" @%s", *t.Assignee)
+					assignee = output.Dim(fmt.Sprintf(" @%s", *t.Assignee))
 				}
-				fmt.Printf("  #%-4d [%s] %s%s\n", t.ID, t.Priority, truncate(t.Title, 50), assignee)
+				fmt.Printf("  #%-4d %s %s%s\n", t.ID, output.ColorPriority(fmt.Sprintf("[%s]", t.Priority)), truncate(t.Title, 50), assignee)
 			}
 		}
-		fmt.Printf("\nTotal: %d tickets\n", resp.Total)
+		fmt.Printf("\n%s\n", output.Dim(fmt.Sprintf("Total: %d tickets", resp.Total)))
 		return nil
 	},
 }
@@ -335,14 +349,21 @@ var ticketSearchCmd = &cobra.Command{
 		}
 
 		f := getFormatter()
+		colorize := isTableOutput()
 		headers := []string{"ID", "TYPE", "STATUS", "PRIORITY", "TITLE"}
 		var rows [][]string
 		for _, t := range resp.Results {
+			tType, tStatus, tPriority := t.Type, t.Status, t.Priority
+			if colorize {
+				tType = output.ColorType(tType)
+				tStatus = output.ColorStatus(tStatus)
+				tPriority = output.ColorPriority(tPriority)
+			}
 			rows = append(rows, []string{
 				fmt.Sprintf("%d", t.ID),
-				t.Type,
-				t.Status,
-				t.Priority,
+				tType,
+				tStatus,
+				tPriority,
 				truncate(t.Title, 50),
 			})
 		}

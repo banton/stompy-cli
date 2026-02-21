@@ -165,6 +165,8 @@ func TestGetValidToken_RefreshesExpiredToken(t *testing.T) {
 	defer server.Close()
 
 	resetViper()
+	// Isolate HOME so config.Save() doesn't overwrite real config
+	t.Setenv("HOME", t.TempDir())
 	viper.Set("auth.access_token", "expired-token")
 	viper.Set("auth.refresh_token", "old-refresh-token")
 	viper.Set("auth.token_expiry", time.Now().Add(-1*time.Hour).Format(time.RFC3339))

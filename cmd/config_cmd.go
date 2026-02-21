@@ -50,19 +50,32 @@ var configShowCmd = &cobra.Command{
 		f := getFormatter()
 
 		var fields []output.KeyValue
-		for k, v := range settings {
-			val := fmt.Sprintf("%v", v)
-			// Mask sensitive values
-			if isSensitive(k) && len(val) > 8 {
-				val = val[:4] + "..." + val[len(val)-4:]
-			}
-			fields = append(fields, output.KeyValue{Key: k, Value: val})
-		}
+		flattenSettings("", settings, &fields)
 
 		fmt.Print(f.FormatSingle(fields))
 		fmt.Printf("\nConfig file: %s\n", config.GetConfigPath())
 		return nil
 	},
+}
+
+// flattenSettings recursively flattens nested maps into dot-separated key-value pairs.
+func flattenSettings(prefix string, m map[string]any, fields *[]output.KeyValue) {
+	for k, v := range m {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		switch vt := v.(type) {
+		case map[string]any:
+			flattenSettings(key, vt, fields)
+		default:
+			val := fmt.Sprintf("%v", v)
+			if isSensitive(key) && len(val) > 12 {
+				val = val[:8] + "..." + val[len(val)-4:]
+			}
+			*fields = append(*fields, output.KeyValue{Key: key, Value: val})
+		}
+	}
 }
 
 func init() {
