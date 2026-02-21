@@ -8,33 +8,30 @@ Stompy is a persistent memory and knowledge management platform for AI-assisted 
 
 - **Zero dependencies** — single static binary, no Python/Node/runtime needed
 - **Cross-platform** — macOS, Linux, Windows (arm64 + amd64)
+- **Self-updating** — built-in `stompy update` keeps you current
 - **Scriptable** — pipe-friendly with JSON/YAML output modes
 - **Fast** — direct REST API calls, no browser overhead
 - **Works everywhere** — SSH sessions, CI/CD pipelines, containers
 
 ## Install
 
-### Download Binary
-
-Download the latest release for your platform from the [Releases](https://github.com/banton/stompy-cli/releases) page.
+### Quick Install (macOS / Linux)
 
 ```bash
 # macOS (Apple Silicon)
-curl -LO https://github.com/banton/stompy-cli/releases/latest/download/stompy-darwin-arm64
-chmod +x stompy-darwin-arm64 && mv stompy-darwin-arm64 /usr/local/bin/stompy
+curl -sL https://github.com/banton/stompy-cli/releases/latest/download/stompy_$(curl -sI https://github.com/banton/stompy-cli/releases/latest | grep -i location | sed 's/.*tag\/v//' | tr -d '\r')_darwin_arm64.tar.gz | tar xz
+sudo mv stompy /usr/local/bin/
 
 # macOS (Intel)
-curl -LO https://github.com/banton/stompy-cli/releases/latest/download/stompy-darwin-amd64
-chmod +x stompy-darwin-amd64 && mv stompy-darwin-amd64 /usr/local/bin/stompy
+curl -sL https://github.com/banton/stompy-cli/releases/latest/download/stompy_$(curl -sI https://github.com/banton/stompy-cli/releases/latest | grep -i location | sed 's/.*tag\/v//' | tr -d '\r')_darwin_amd64.tar.gz | tar xz
+sudo mv stompy /usr/local/bin/
 
 # Linux (amd64)
-curl -LO https://github.com/banton/stompy-cli/releases/latest/download/stompy-linux-amd64
-chmod +x stompy-linux-amd64 && sudo mv stompy-linux-amd64 /usr/local/bin/stompy
-
-# Linux (arm64)
-curl -LO https://github.com/banton/stompy-cli/releases/latest/download/stompy-linux-arm64
-chmod +x stompy-linux-arm64 && sudo mv stompy-linux-arm64 /usr/local/bin/stompy
+curl -sL https://github.com/banton/stompy-cli/releases/latest/download/stompy_$(curl -sI https://github.com/banton/stompy-cli/releases/latest | grep -i location | sed 's/.*tag\/v//' | tr -d '\r')_linux_amd64.tar.gz | tar xz
+sudo mv stompy /usr/local/bin/
 ```
+
+Or download manually from the [Releases](https://github.com/banton/stompy-cli/releases) page.
 
 ### Build from Source
 
@@ -45,6 +42,14 @@ git clone https://github.com/banton/stompy-cli.git
 cd stompy-cli
 make build      # → bin/stompy
 make install    # → $GOPATH/bin/stompy
+```
+
+### Update
+
+Stompy checks for updates in the background and notifies you when a new version is available. To upgrade:
+
+```bash
+stompy update
 ```
 
 ## Quick Start
@@ -72,7 +77,7 @@ stompy ticket board
 cat architecture.md | stompy context lock architecture
 
 # JSON output for scripting
-stompy project list --output json | jq '.[] | .NAME'
+stompy project list -o json | jq '.[].name'
 ```
 
 ## Authentication
@@ -136,6 +141,7 @@ stompy
 │   ├── set <key> <value>          # Set config value
 │   ├── get <key>                  # Get config value
 │   └── show                       # Show all config
+├── update                         # Self-update to latest version
 ├── version                        # Print version
 └── completion [bash|zsh|fish|ps]  # Shell completions
 ```
@@ -176,6 +182,21 @@ cat README.md | stompy context lock readme-context
 | feature | shipped |
 | decision | decided |
 
+### Output Formats
+
+All list/detail commands support structured output for scripting:
+
+```bash
+# Default table output (with colors)
+stompy ticket list
+
+# JSON (pipe to jq, python, etc.)
+stompy ticket list -o json | jq '.[] | select(.priority == "high")'
+
+# YAML
+stompy project list -o yaml
+```
+
 ## Configuration
 
 Config is stored at `~/.stompy/config.yaml`:
@@ -193,6 +214,19 @@ auth:
   email: user@example.com
 ```
 
+## Shell Completions
+
+```bash
+# Bash
+stompy completion bash > /etc/bash_completion.d/stompy
+
+# Zsh
+stompy completion zsh > "${fpath[1]}/_stompy"
+
+# Fish
+stompy completion fish > ~/.config/fish/completions/stompy.fish
+```
+
 ## Links
 
 - **Stompy Platform**: [stompy.ai](https://stompy.ai)
@@ -205,8 +239,8 @@ auth:
 We welcome contributions! Stompy CLI is built with:
 
 - **Go 1.21+** with [Cobra](https://github.com/spf13/cobra) (CLI framework) and [Viper](https://github.com/spf13/viper) (config)
+- **[go-pretty](https://github.com/jedib0t/go-pretty)** for terminal-aware table rendering
 - **TDD** — tests first, implementation second
-- **55+ unit tests** with `httptest` mocks and deterministic test data
 
 ```bash
 # Run tests
