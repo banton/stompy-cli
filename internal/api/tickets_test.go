@@ -1,0 +1,308 @@
+package api
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestListTickets(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("method = %s, want GET", r.Method)
+		}
+		if r.URL.Path != "/projects/proj/tickets" {
+			t.Errorf("path = %s, want /projects/proj/tickets", r.URL.Path)
+		}
+		if r.URL.Query().Get("status") != "open" {
+			t.Errorf("status = %q, want open", r.URL.Query().Get("status"))
+		}
+		json.NewEncoder(w).Encode(TicketListResponse{
+			Tickets: []TicketResponse{
+				{ID: 1, Title: "Fix bug", Type: "bug", Status: "open", Priority: "high"},
+			},
+			Total: 1,
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	resp, err := c.ListTickets("proj", "open", "", "", 0, 0)
+	if err != nil {
+		t.Fatalf("ListTickets() error: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Errorf("Total = %d, want 1", resp.Total)
+	}
+	if resp.Tickets[0].Title != "Fix bug" {
+		t.Errorf("Title = %q, want %q", resp.Tickets[0].Title, "Fix bug")
+	}
+}
+
+func TestGetTicket(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/projects/proj/tickets/42" {
+			t.Errorf("path = %s, want /projects/proj/tickets/42", r.URL.Path)
+		}
+		json.NewEncoder(w).Encode(TicketResponse{
+			ID: 42, Title: "Implement feature", Type: "feature", Status: "open", Priority: "medium",
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	resp, err := c.GetTicket("proj", 42)
+	if err != nil {
+		t.Fatalf("GetTicket() error: %v", err)
+	}
+	if resp.ID != 42 {
+		t.Errorf("ID = %d, want 42", resp.ID)
+	}
+}
+
+func TestCreateTicket(t *testing.T) {
+	var gotBody TicketCreate
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &gotBody)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(TicketResponse{
+			ID: 1, Title: gotBody.Title, Type: gotBody.Type, Status: "open", Priority: gotBody.Priority,
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	desc := "detailed description"
+	resp, err := c.CreateTicket("proj", TicketCreate{
+		Title:       "New ticket",
+		Description: &desc,
+		Type:        "task",
+		Priority:    "high",
+		Tags:        []string{"backend"},
+	})
+	if err != nil {
+		t.Fatalf("CreateTicket() error: %v", err)
+	}
+	if gotBody.Title != "New ticket" {
+		t.Errorf("request title = %q, want %q", gotBody.Title, "New ticket")
+	}
+	if resp.ID != 1 {
+		t.Errorf("ID = %d, want 1", resp.ID)
+	}
+}
+
+func TestUpdateTicket(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("method = %s, want PUT", r.Method)
+		}
+		if r.URL.Path != "/projects/proj/tickets/1" {
+			t.Errorf("path = %s, want /projects/proj/tickets/1", r.URL.Path)
+		}
+		json.NewEncoder(w).Encode(TicketResponse{
+			ID: 1, Title: "Updated", Type: "task", Status: "open", Priority: "low",
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	title := "Updated"
+	resp, err := c.UpdateTicket("proj", 1, TicketUpdate{Title: &title})
+	if err != nil {
+		t.Fatalf("UpdateTicket() error: %v", err)
+	}
+	if resp.Title != "Updated" {
+		t.Errorf("Title = %q, want %q", resp.Title, "Updated")
+	}
+}
+
+func TestTransitionTicket(t *testing.T) {
+	var gotBody TransitionRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/projects/proj/tickets/1/transition" {
+			t.Errorf("path = %s, want /projects/proj/tickets/1/transition", r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &gotBody)
+		json.NewEncoder(w).Encode(TicketResponse{
+			ID: 1, Title: "Ticket", Type: "task", Status: gotBody.Status, Priority: "medium",
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	resp, err := c.TransitionTicket("proj", 1, "in_progress")
+	if err != nil {
+		t.Fatalf("TransitionTicket() error: %v", err)
+	}
+	if gotBody.Status != "in_progress" {
+		t.Errorf("request status = %q, want %q", gotBody.Status, "in_progress")
+	}
+	if resp.Status != "in_progress" {
+		t.Errorf("response status = %q, want %q", resp.Status, "in_progress")
+	}
+}
+
+func TestSearchTickets(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/projects/proj/tickets/search" {
+			t.Errorf("path = %s, want /projects/proj/tickets/search", r.URL.Path)
+		}
+		if r.URL.Query().Get("q") != "auth" {
+			t.Errorf("q = %q, want auth", r.URL.Query().Get("q"))
+		}
+		json.NewEncoder(w).Encode(TicketSearchResponse{
+			Results: []TicketResponse{{ID: 1, Title: "Auth bug", Type: "bug", Status: "open", Priority: "high"}},
+			Total:   1,
+			Query:   "auth",
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	resp, err := c.SearchTickets("proj", "auth", "", "", 0)
+	if err != nil {
+		t.Fatalf("SearchTickets() error: %v", err)
+	}
+	if resp.Total != 1 {
+		t.Errorf("Total = %d, want 1", resp.Total)
+	}
+	if resp.Query != "auth" {
+		t.Errorf("Query = %q, want %q", resp.Query, "auth")
+	}
+}
+
+func TestGetBoard(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/projects/proj/tickets/board" {
+			t.Errorf("path = %s, want /projects/proj/tickets/board", r.URL.Path)
+		}
+		if r.URL.Query().Get("view") != "summary" {
+			t.Errorf("view = %q, want summary", r.URL.Query().Get("view"))
+		}
+		json.NewEncoder(w).Encode(BoardView{
+			Columns: []BoardColumn{
+				{Status: "open", Count: 3},
+				{Status: "in_progress", Count: 1},
+			},
+			Total: 4,
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	resp, err := c.GetBoard("proj", "summary", "", "")
+	if err != nil {
+		t.Fatalf("GetBoard() error: %v", err)
+	}
+	if resp.Total != 4 {
+		t.Errorf("Total = %d, want 4", resp.Total)
+	}
+	if len(resp.Columns) != 2 {
+		t.Errorf("len(Columns) = %d, want 2", len(resp.Columns))
+	}
+}
+
+func TestAddLink(t *testing.T) {
+	var gotBody LinkCreate
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s, want POST", r.Method)
+		}
+		if r.URL.Path != "/projects/proj/tickets/1/links" {
+			t.Errorf("path = %s, want /projects/proj/tickets/1/links", r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &gotBody)
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(TicketLinkResp{
+			ID: 10, SourceID: 1, TargetID: gotBody.TargetID, LinkType: gotBody.LinkType,
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	resp, err := c.AddLink("proj", 1, LinkCreate{TargetID: 2, LinkType: "blocks"})
+	if err != nil {
+		t.Fatalf("AddLink() error: %v", err)
+	}
+	if gotBody.TargetID != 2 {
+		t.Errorf("request TargetID = %d, want 2", gotBody.TargetID)
+	}
+	if resp.LinkType != "blocks" {
+		t.Errorf("LinkType = %q, want %q", resp.LinkType, "blocks")
+	}
+}
+
+func TestListLinks(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/projects/proj/tickets/1/links" {
+			t.Errorf("path = %s, want /projects/proj/tickets/1/links", r.URL.Path)
+		}
+		json.NewEncoder(w).Encode([]TicketLinkResp{
+			{ID: 10, SourceID: 1, TargetID: 2, LinkType: "blocks"},
+		})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	resp, err := c.ListLinks("proj", 1)
+	if err != nil {
+		t.Fatalf("ListLinks() error: %v", err)
+	}
+	if len(resp) != 1 {
+		t.Fatalf("len = %d, want 1", len(resp))
+	}
+	if resp[0].LinkType != "blocks" {
+		t.Errorf("LinkType = %q, want %q", resp[0].LinkType, "blocks")
+	}
+}
+
+func TestRemoveLink(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			t.Errorf("method = %s, want DELETE", r.Method)
+		}
+		if r.URL.Path != "/projects/proj/tickets/1/links/10" {
+			t.Errorf("path = %s, want /projects/proj/tickets/1/links/10", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	err := c.RemoveLink("proj", 1, 10)
+	if err != nil {
+		t.Fatalf("RemoveLink() error: %v", err)
+	}
+}
+
+func TestListTickets_Error(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{"message": "forbidden"})
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	_, err := c.ListTickets("proj", "", "", "", 0, 0)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.StatusCode != 403 {
+		t.Errorf("StatusCode = %d, want 403", apiErr.StatusCode)
+	}
+}

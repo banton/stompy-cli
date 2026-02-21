@@ -1,0 +1,166 @@
+package api
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"strconv"
+	"time"
+)
+
+type ContextCreateRequest struct {
+	Topic      string `json:"topic"`
+	Content    string `json:"content"`
+	Priority   string `json:"priority,omitempty"`
+	Tags       string `json:"tags,omitempty"`
+	ForceStore bool   `json:"force_store,omitempty"`
+}
+
+type ContextUpdateRequest struct {
+	Content  string `json:"content,omitempty"`
+	Priority string `json:"priority,omitempty"`
+	Tags     string `json:"tags,omitempty"`
+}
+
+type ContextResponse struct {
+	ID           int        `json:"id"`
+	Topic        string     `json:"topic"`
+	Version      string     `json:"version"`
+	Priority     string     `json:"priority"`
+	Tags         []string   `json:"tags"`
+	Preview      *string    `json:"preview,omitempty"`
+	KeyConcepts  []string   `json:"key_concepts,omitempty"`
+	ContentHash  *string    `json:"content_hash,omitempty"`
+	LockedAt     *time.Time `json:"locked_at,omitempty"`
+	LastAccessed *time.Time `json:"last_accessed,omitempty"`
+	AccessCount  int        `json:"access_count"`
+}
+
+type ContextDetailResponse struct {
+	ContextResponse
+	Content  string           `json:"content"`
+	Versions []VersionSummary `json:"versions,omitempty"`
+}
+
+type VersionSummary struct {
+	Version   string     `json:"version"`
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+}
+
+type ContextCreateResponse struct {
+	Status  string `json:"status"`
+	Topic   string `json:"topic"`
+	Version string `json:"version"`
+}
+
+type ContextDeleteResponse struct {
+	Status   string `json:"status"`
+	Topic    string `json:"topic"`
+	Archived bool   `json:"archived"`
+}
+
+type ContextMoveResponse struct {
+	Status        string `json:"status"`
+	Topic         string `json:"topic"`
+	TargetProject string `json:"target_project"`
+}
+
+type ContextListResponse struct {
+	Contexts []ContextResponse `json:"contexts"`
+	Total    int               `json:"total"`
+}
+
+func (c *Client) ListContexts(project string, priority, tags string, limit, offset int) (*ContextListResponse, error) {
+	params := url.Values{}
+	if priority != "" {
+		params.Set("priority", priority)
+	}
+	if tags != "" {
+		params.Set("tags", tags)
+	}
+	if limit > 0 {
+		params.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		params.Set("offset", strconv.Itoa(offset))
+	}
+	var resp ContextListResponse
+	if err := c.Get(fmt.Sprintf("/projects/%s/contexts", url.PathEscape(project)), params, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) GetContext(project, topic string, version string) (*ContextDetailResponse, error) {
+	params := url.Values{}
+	if version != "" {
+		params.Set("version", version)
+	}
+	var resp ContextDetailResponse
+	if err := c.Get(fmt.Sprintf("/projects/%s/contexts/%s", url.PathEscape(project), url.PathEscape(topic)), params, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) LockContext(project string, req ContextCreateRequest) (*ContextCreateResponse, error) {
+	var resp ContextCreateResponse
+	if err := c.Post(fmt.Sprintf("/projects/%s/contexts", url.PathEscape(project)), req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) UnlockContext(project, topic string, version string, force, noArchive bool) (*ContextDeleteResponse, error) {
+	params := url.Values{}
+	if version != "" {
+		params.Set("version", version)
+	}
+	if force {
+		params.Set("force", "true")
+	}
+	if noArchive {
+		params.Set("no_archive", "true")
+	}
+
+	data, _, err := c.Do("DELETE", fmt.Sprintf("/projects/%s/contexts/%s", url.PathEscape(project), url.PathEscape(topic)), nil, params)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp ContextDeleteResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, fmt.Errorf("decoding response: %w", err)
+	}
+	return &resp, nil
+}
+
+func (c *Client) UpdateContext(project, topic string, req ContextUpdateRequest) (*ContextResponse, error) {
+	var resp ContextResponse
+	if err := c.Put(fmt.Sprintf("/projects/%s/contexts/%s", url.PathEscape(project), url.PathEscape(topic)), req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) SearchContexts(project, query string, limit int) (*ContextListResponse, error) {
+	params := url.Values{}
+	params.Set("q", query)
+	if limit > 0 {
+		params.Set("limit", strconv.Itoa(limit))
+	}
+	var resp ContextListResponse
+	if err := c.Get(fmt.Sprintf("/projects/%s/contexts/search", url.PathEscape(project)), params, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+func (c *Client) MoveContext(project, topic, targetProject string) (*ContextMoveResponse, error) {
+	body := map[string]string{"target_project": targetProject}
+	var resp ContextMoveResponse
+	if err := c.Post(fmt.Sprintf("/projects/%s/contexts/%s/move", url.PathEscape(project), url.PathEscape(topic)), body, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
