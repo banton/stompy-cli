@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
 
+	"github.com/banton/stompy-cli/internal/api"
 	"github.com/banton/stompy-cli/internal/config"
 	"github.com/banton/stompy-cli/internal/output"
 	"github.com/banton/stompy-cli/internal/update"
@@ -16,7 +19,23 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the stompy CLI version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("stompy-cli version %s\n", Version)
+		fmt.Printf("stompy-cli %s\n", Version)
+
+		// Try to fetch API version from server
+		apiURL := flagAPIURL
+		if apiURL == "" {
+			apiURL = config.GetAPIURL()
+		}
+		if apiURL != "" {
+			c := api.NewClient(apiURL, "", Version, false)
+			// Ping health endpoint to get version headers
+			_, _, err := c.Do(http.MethodGet, "/health", nil, url.Values{})
+			if err == nil && c.APIVersion != "" {
+				fmt.Printf("API: %s (server %s)\n", apiURL, c.APIVersion)
+			} else {
+				fmt.Printf("API: %s\n", apiURL)
+			}
+		}
 
 		// Check for newer version
 		if latest := update.CheckForUpdate(Version, config.GetConfigDir()); latest != "" {

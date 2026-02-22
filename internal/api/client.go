@@ -21,15 +21,25 @@ type Client struct {
 	BaseURL    string
 	AuthToken  string
 	UserAgent  string
+	Version    string // CLI version (e.g., "0.2.0" or "dev")
 	HTTPClient *http.Client
 	Verbose    bool
+
+	// Server version info (populated from response headers)
+	APIVersion   string // X-Stompy-API-Version
+	compatWarned bool   // only warn once per invocation
 }
 
-func NewClient(baseURL, authToken string, verbose bool) *Client {
+func NewClient(baseURL, authToken, version string, verbose bool) *Client {
+	ua := "stompy-cli/dev"
+	if version != "" && version != "dev" {
+		ua = "stompy-cli/" + version
+	}
 	return &Client{
 		BaseURL:   strings.TrimRight(baseURL, "/"),
 		AuthToken: authToken,
-		UserAgent: "stompy-cli/dev",
+		UserAgent: ua,
+		Version:   version,
 		HTTPClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -123,6 +133,19 @@ func (c *Client) Do(method, path string, body any, params url.Values) ([]byte, i
 					preview = preview[:300] + "..."
 				}
 				fmt.Fprintf(os.Stderr, "[DEBUG]     Body: %s\n", preview)
+			}
+		}
+
+		// Check server compatibility headers (once per invocation)
+		if !c.compatWarned {
+			if apiVer := resp.Header.Get("X-Stompy-API-Version"); apiVer != "" {
+				c.APIVersion = apiVer
+			}
+			if minCLI := resp.Header.Get("X-Stompy-Min-CLI-Version"); minCLI != "" {
+				if warn := CheckCompat(c.Version, minCLI); warn != "" {
+					fmt.Fprintln(os.Stderr, warn)
+					c.compatWarned = true
+				}
 			}
 		}
 

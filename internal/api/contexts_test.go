@@ -31,7 +31,7 @@ func TestListContexts(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.ListContexts("myproj", "important", "", 10, 0)
 	if err != nil {
 		t.Fatalf("ListContexts() error: %v", err)
@@ -58,7 +58,7 @@ func TestGetContext(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.GetContext("myproj", "arch_decisions", "")
 	if err != nil {
 		t.Fatalf("GetContext() error: %v", err)
@@ -80,7 +80,7 @@ func TestGetContext_WithVersion(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.GetContext("proj", "t", "2.0")
 	if err != nil {
 		t.Fatalf("error: %v", err)
@@ -108,7 +108,7 @@ func TestLockContext(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	req := ContextCreateRequest{Topic: "new_ctx", Content: "content here", Priority: "important"}
 	resp, err := c.LockContext("myproj", req)
 	if err != nil {
@@ -139,7 +139,7 @@ func TestUnlockContext(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.UnlockContext("myproj", "old_ctx", "", true, false)
 	if err != nil {
 		t.Fatalf("UnlockContext() error: %v", err)
@@ -163,7 +163,7 @@ func TestUpdateContext(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.UpdateContext("proj", "ctx", ContextUpdateRequest{Priority: "always_check"})
 	if err != nil {
 		t.Fatalf("UpdateContext() error: %v", err)
@@ -185,7 +185,7 @@ func TestSearchContexts(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.SearchContexts("proj", "architecture", 0)
 	if err != nil {
 		t.Fatalf("SearchContexts() error: %v", err)
@@ -212,7 +212,7 @@ func TestMoveContext(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.MoveContext("proj", "ctx", "other")
 	if err != nil {
 		t.Fatalf("MoveContext() error: %v", err)
