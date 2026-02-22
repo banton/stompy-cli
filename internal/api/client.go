@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+const (
+	maxRetries   = 2
+	retryBaseDelay = 1 * time.Second
+)
+
 type Client struct {
 	BaseURL    string
 	AuthToken  string
@@ -38,7 +43,6 @@ func (c *Client) Do(method, path string, body any, params url.Values) ([]byte, i
 		u += "?" + params.Encode()
 	}
 
-	var reqBody io.Reader
 	var reqBytes []byte
 	if body != nil {
 		var err error
@@ -46,21 +50,6 @@ func (c *Client) Do(method, path string, body any, params url.Values) ([]byte, i
 		if err != nil {
 			return nil, 0, fmt.Errorf("marshaling request body: %w", err)
 		}
-		reqBody = bytes.NewReader(reqBytes)
-	}
-
-	req, err := http.NewRequest(method, u, reqBody)
-	if err != nil {
-		return nil, 0, fmt.Errorf("creating request: %w", err)
-	}
-
-	if c.AuthToken != "" {
-		req.Header.Set("Authorization", "Bearer "+c.AuthToken)
-	}
-	req.Header.Set("User-Agent", c.UserAgent)
-
-	if body != nil && (method == http.MethodPost || method == http.MethodPut) {
-		req.Header.Set("Content-Type", "application/json")
 	}
 
 	if c.Verbose {
@@ -74,46 +63,105 @@ func (c *Client) Do(method, path string, body any, params url.Values) ([]byte, i
 		}
 	}
 
-	start := time.Now()
-	resp, err := c.HTTPClient.Do(req)
-	elapsed := time.Since(start)
-
-	if err != nil {
-		if c.Verbose {
-			fmt.Fprintf(os.Stderr, "[DEBUG] <-- ERROR after %s: %v\n", elapsed, err)
-		}
-		return nil, 0, fmt.Errorf("executing request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("reading response body: %w", err)
+	retries := 0
+	if isIdempotent(method) {
+		retries = maxRetries
 	}
 
-	if c.Verbose {
-		fmt.Fprintf(os.Stderr, "[DEBUG] <-- %d %s (%s, %d bytes)\n", resp.StatusCode, http.StatusText(resp.StatusCode), elapsed, len(respBody))
-		if len(respBody) > 0 {
-			preview := string(respBody)
-			if len(preview) > 300 {
-				preview = preview[:300] + "..."
+	var lastErr error
+	for attempt := 0; attempt <= retries; attempt++ {
+		if attempt > 0 {
+			delay := retryBaseDelay * time.Duration(1<<(attempt-1))
+			if c.Verbose {
+				fmt.Fprintf(os.Stderr, "[DEBUG]     Retry %d/%d after %s\n", attempt, retries, delay)
 			}
-			fmt.Fprintf(os.Stderr, "[DEBUG]     Body: %s\n", preview)
+			time.Sleep(delay)
 		}
+
+		var reqBody io.Reader
+		if len(reqBytes) > 0 {
+			reqBody = bytes.NewReader(reqBytes)
+		}
+
+		req, err := http.NewRequest(method, u, reqBody)
+		if err != nil {
+			return nil, 0, fmt.Errorf("creating request: %w", err)
+		}
+
+		if c.AuthToken != "" {
+			req.Header.Set("Authorization", "Bearer "+c.AuthToken)
+		}
+		req.Header.Set("User-Agent", c.UserAgent)
+
+		if body != nil && (method == http.MethodPost || method == http.MethodPut) {
+			req.Header.Set("Content-Type", "application/json")
+		}
+
+		start := time.Now()
+		resp, err := c.HTTPClient.Do(req)
+		elapsed := time.Since(start)
+
+		if err != nil {
+			if c.Verbose {
+				fmt.Fprintf(os.Stderr, "[DEBUG] <-- ERROR after %s: %v\n", elapsed, err)
+			}
+			lastErr = fmt.Errorf("executing request: %w", err)
+			continue
+		}
+
+		respBody, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return nil, resp.StatusCode, fmt.Errorf("reading response body: %w", err)
+		}
+
+		if c.Verbose {
+			fmt.Fprintf(os.Stderr, "[DEBUG] <-- %d %s (%s, %d bytes)\n", resp.StatusCode, http.StatusText(resp.StatusCode), elapsed, len(respBody))
+			if len(respBody) > 0 {
+				preview := string(respBody)
+				if len(preview) > 300 {
+					preview = preview[:300] + "..."
+				}
+				fmt.Fprintf(os.Stderr, "[DEBUG]     Body: %s\n", preview)
+			}
+		}
+
+		if isRetryableStatus(resp.StatusCode) {
+			lastErr = &APIError{StatusCode: resp.StatusCode, Message: http.StatusText(resp.StatusCode)}
+			continue
+		}
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			apiErr := &APIError{StatusCode: resp.StatusCode}
+			if err := json.Unmarshal(respBody, apiErr); err != nil {
+				apiErr.Message = string(respBody)
+			}
+			if apiErr.Message == "" {
+				apiErr.Message = http.StatusText(resp.StatusCode)
+			}
+			return nil, resp.StatusCode, apiErr
+		}
+
+		return respBody, resp.StatusCode, nil
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		apiErr := &APIError{StatusCode: resp.StatusCode}
-		if err := json.Unmarshal(respBody, apiErr); err != nil {
-			apiErr.Message = string(respBody)
-		}
-		if apiErr.Message == "" {
-			apiErr.Message = http.StatusText(resp.StatusCode)
-		}
-		return nil, resp.StatusCode, apiErr
-	}
+	return nil, 0, lastErr
+}
 
-	return respBody, resp.StatusCode, nil
+func isIdempotent(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete, http.MethodOptions:
+		return true
+	}
+	return false
+}
+
+func isRetryableStatus(code int) bool {
+	switch code {
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	}
+	return false
 }
 
 func (c *Client) Get(path string, params url.Values, result any) error {

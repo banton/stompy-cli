@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 )
 
 func TestNewClient(t *testing.T) {
@@ -215,6 +216,173 @@ func TestClient_Delete(t *testing.T) {
 	err := c.Delete("/resource/1", nil)
 	if err != nil {
 		t.Fatalf("Delete() error: %v", err)
+	}
+}
+
+func TestClient_Do_RetriesOnTimeout(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts <= 2 {
+			// Simulate timeout by not responding before the client gives up.
+			// We use a hijack to close the connection abruptly.
+			hj, ok := w.(http.Hijacker)
+			if !ok {
+				t.Fatal("server doesn't support hijacking")
+			}
+			conn, _, _ := hj.Hijack()
+			conn.Close()
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	// Use a short timeout so the test is fast.
+	c.HTTPClient.Timeout = 500 * time.Millisecond
+
+	data, code, err := c.Do(http.MethodGet, "/test", nil, nil)
+	if err != nil {
+		t.Fatalf("Do() error: %v", err)
+	}
+	if code != 200 {
+		t.Errorf("status = %d, want 200", code)
+	}
+	if string(data) != `{"ok":true}` {
+		t.Errorf("body = %q, want {\"ok\":true}", string(data))
+	}
+	if attempts != 3 {
+		t.Errorf("attempts = %d, want 3 (1 initial + 2 retries)", attempts)
+	}
+}
+
+func TestClient_Do_RetriesOn502(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			w.Write([]byte("bad gateway"))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	data, code, err := c.Do(http.MethodGet, "/test", nil, nil)
+	if err != nil {
+		t.Fatalf("Do() error: %v", err)
+	}
+	if code != 200 {
+		t.Errorf("status = %d, want 200", code)
+	}
+	if string(data) != `{"ok":true}` {
+		t.Errorf("body = %q", string(data))
+	}
+	if attempts != 2 {
+		t.Errorf("attempts = %d, want 2", attempts)
+	}
+}
+
+func TestClient_Do_NoRetryOnPost(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusBadGateway)
+		w.Write([]byte("bad gateway"))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	_, _, err := c.Do(http.MethodPost, "/test", map[string]string{"k": "v"}, nil)
+	if err == nil {
+		t.Fatal("expected error for 502 on POST")
+	}
+	if attempts != 1 {
+		t.Errorf("attempts = %d, want 1 (no retry for POST)", attempts)
+	}
+}
+
+func TestClient_Do_NoRetryOn4xx(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"message":"not found"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	_, _, err := c.Do(http.MethodGet, "/test", nil, nil)
+	if err == nil {
+		t.Fatal("expected error for 404")
+	}
+	if attempts != 1 {
+		t.Errorf("attempts = %d, want 1 (no retry for 404)", attempts)
+	}
+}
+
+func TestClient_Do_ExhaustsRetries(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusServiceUnavailable)
+		w.Write([]byte("unavailable"))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", false)
+	_, _, err := c.Do(http.MethodGet, "/test", nil, nil)
+	if err == nil {
+		t.Fatal("expected error after exhausting retries")
+	}
+	// 1 initial + 2 retries = 3
+	if attempts != 3 {
+		t.Errorf("attempts = %d, want 3", attempts)
+	}
+}
+
+func TestIsIdempotent(t *testing.T) {
+	tests := []struct {
+		method string
+		want   bool
+	}{
+		{http.MethodGet, true},
+		{http.MethodHead, true},
+		{http.MethodPut, true},
+		{http.MethodDelete, true},
+		{http.MethodOptions, true},
+		{http.MethodPost, false},
+		{http.MethodPatch, false},
+	}
+	for _, tt := range tests {
+		if got := isIdempotent(tt.method); got != tt.want {
+			t.Errorf("isIdempotent(%q) = %v, want %v", tt.method, got, tt.want)
+		}
+	}
+}
+
+func TestIsRetryableStatus(t *testing.T) {
+	tests := []struct {
+		code int
+		want bool
+	}{
+		{502, true},
+		{503, true},
+		{504, true},
+		{500, false},
+		{404, false},
+		{200, false},
+		{401, false},
+	}
+	for _, tt := range tests {
+		if got := isRetryableStatus(tt.code); got != tt.want {
+			t.Errorf("isRetryableStatus(%d) = %v, want %v", tt.code, got, tt.want)
+		}
 	}
 }
 
