@@ -75,7 +75,7 @@ var rootCmd = &cobra.Command{
 			apiURL = config.GetAPIURL()
 		}
 
-		apiClient = api.NewClient(apiURL, token, flagVerbose)
+		apiClient = api.NewClient(apiURL, token, Version, flagVerbose)
 		return nil
 	},
 }

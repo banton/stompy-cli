@@ -31,7 +31,7 @@ func TestListProjects(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.ListProjects(true)
 	if err != nil {
 		t.Fatalf("ListProjects() error: %v", err)
@@ -53,7 +53,7 @@ func TestListProjects_WithoutStats(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	_, err := c.ListProjects(false)
 	if err != nil {
 		t.Fatalf("ListProjects() error: %v", err)
@@ -80,7 +80,7 @@ func TestGetProject(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.GetProject("myproj", true)
 	if err != nil {
 		t.Fatalf("GetProject() error: %v", err)
@@ -114,7 +114,7 @@ func TestCreateProject(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.CreateProject(ProjectCreate{Name: "newproj"})
 	if err != nil {
 		t.Fatalf("CreateProject() error: %v", err)
@@ -142,7 +142,7 @@ func TestDeleteProject(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	err := c.DeleteProject("oldproj")
 	if err != nil {
 		t.Fatalf("DeleteProject() error: %v", err)
@@ -156,7 +156,7 @@ func TestGetProject_Error(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	_, err := c.GetProject("missing", false)
 	if err == nil {
 		t.Fatal("expected error, got nil")

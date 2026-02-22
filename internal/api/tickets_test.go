@@ -28,7 +28,7 @@ func TestListTickets(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.ListTickets("proj", "open", "", "", 0, 0)
 	if err != nil {
 		t.Fatalf("ListTickets() error: %v", err)
@@ -52,7 +52,7 @@ func TestGetTicket(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.GetTicket("proj", 42)
 	if err != nil {
 		t.Fatalf("GetTicket() error: %v", err)
@@ -77,7 +77,7 @@ func TestCreateTicket(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	desc := "detailed description"
 	resp, err := c.CreateTicket("proj", TicketCreate{
 		Title:       "New ticket",
@@ -111,7 +111,7 @@ func TestUpdateTicket(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	title := "Updated"
 	resp, err := c.UpdateTicket("proj", 1, TicketUpdate{Title: &title})
 	if err != nil {
@@ -139,7 +139,7 @@ func TestTransitionTicket(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.TransitionTicket("proj", 1, "in_progress")
 	if err != nil {
 		t.Fatalf("TransitionTicket() error: %v", err)
@@ -168,7 +168,7 @@ func TestSearchTickets(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.SearchTickets("proj", "auth", "", "", 0)
 	if err != nil {
 		t.Fatalf("SearchTickets() error: %v", err)
@@ -199,7 +199,7 @@ func TestGetBoard(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.GetBoard("proj", "summary", "", "")
 	if err != nil {
 		t.Fatalf("GetBoard() error: %v", err)
@@ -230,7 +230,7 @@ func TestAddLink(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.AddLink("proj", 1, LinkCreate{TargetID: 2, LinkType: "blocks"})
 	if err != nil {
 		t.Fatalf("AddLink() error: %v", err)
@@ -254,7 +254,7 @@ func TestListLinks(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	resp, err := c.ListLinks("proj", 1)
 	if err != nil {
 		t.Fatalf("ListLinks() error: %v", err)
@@ -279,7 +279,7 @@ func TestRemoveLink(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	err := c.RemoveLink("proj", 1, 10)
 	if err != nil {
 		t.Fatalf("RemoveLink() error: %v", err)
@@ -293,7 +293,7 @@ func TestListTickets_Error(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	_, err := c.ListTickets("proj", "", "", "", 0, 0)
 	if err == nil {
 		t.Fatal("expected error, got nil")

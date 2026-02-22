@@ -11,7 +11,7 @@ import (
 )
 
 func TestNewClient(t *testing.T) {
-	c := NewClient("https://api.example.com", "test-token", false)
+	c := NewClient("https://api.example.com", "test-token", "1.2.3", false)
 
 	if c.BaseURL != "https://api.example.com" {
 		t.Errorf("BaseURL = %q, want %q", c.BaseURL, "https://api.example.com")
@@ -19,16 +19,30 @@ func TestNewClient(t *testing.T) {
 	if c.AuthToken != "test-token" {
 		t.Errorf("AuthToken = %q, want %q", c.AuthToken, "test-token")
 	}
-	if c.UserAgent != "stompy-cli/dev" {
-		t.Errorf("UserAgent = %q, want %q", c.UserAgent, "stompy-cli/dev")
+	if c.UserAgent != "stompy-cli/1.2.3" {
+		t.Errorf("UserAgent = %q, want %q", c.UserAgent, "stompy-cli/1.2.3")
 	}
 	if c.Verbose {
 		t.Error("Verbose should be false")
 	}
 }
 
+func TestNewClient_DevVersion(t *testing.T) {
+	c := NewClient("https://api.example.com", "tok", "dev", false)
+	if c.UserAgent != "stompy-cli/dev" {
+		t.Errorf("UserAgent = %q, want %q", c.UserAgent, "stompy-cli/dev")
+	}
+}
+
+func TestNewClient_EmptyVersion(t *testing.T) {
+	c := NewClient("https://api.example.com", "tok", "", false)
+	if c.UserAgent != "stompy-cli/dev" {
+		t.Errorf("UserAgent = %q, want %q (fallback for empty version)", c.UserAgent, "stompy-cli/dev")
+	}
+}
+
 func TestNewClient_TrimsTrailingSlash(t *testing.T) {
-	c := NewClient("https://api.example.com/", "tok", false)
+	c := NewClient("https://api.example.com/", "tok", "dev", false)
 	if c.BaseURL != "https://api.example.com" {
 		t.Errorf("BaseURL = %q, want trailing slash trimmed", c.BaseURL)
 	}
@@ -45,7 +59,7 @@ func TestClient_Do_SetsHeaders(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "my-token", false)
+	c := NewClient(srv.URL, "my-token", "0.2.0", false)
 	_, _, err := c.Do(http.MethodPost, "/test", map[string]string{"key": "val"}, nil)
 	if err != nil {
 		t.Fatalf("Do() error: %v", err)
@@ -60,8 +74,8 @@ func TestClient_Do_SetsHeaders(t *testing.T) {
 	if got := gotHeaders.Get("Content-Type"); got != "application/json" {
 		t.Errorf("Content-Type = %q, want %q", got, "application/json")
 	}
-	if got := gotHeaders.Get("User-Agent"); got != "stompy-cli/dev" {
-		t.Errorf("User-Agent = %q, want %q", got, "stompy-cli/dev")
+	if got := gotHeaders.Get("User-Agent"); got != "stompy-cli/0.2.0" {
+		t.Errorf("User-Agent = %q, want %q", got, "stompy-cli/0.2.0")
 	}
 }
 
@@ -74,7 +88,7 @@ func TestClient_Do_QueryParams(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "", false)
+	c := NewClient(srv.URL, "", "dev", false)
 	params := url.Values{"foo": {"bar"}, "baz": {"1"}}
 	_, _, err := c.Do(http.MethodGet, "/items", nil, params)
 	if err != nil {
@@ -100,7 +114,7 @@ func TestClient_Do_NonOKReturnsAPIError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	_, _, err := c.Do(http.MethodGet, "/missing", nil, nil)
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -125,7 +139,7 @@ func TestClient_Do_NonJSONErrorBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "", false)
+	c := NewClient(srv.URL, "", "dev", false)
 	_, _, err := c.Do(http.MethodGet, "/fail", nil, nil)
 	if err == nil {
 		t.Fatal("expected error")
@@ -145,7 +159,7 @@ func TestClient_Get(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	var result map[string]string
 	err := c.Get("/resource", nil, &result)
 	if err != nil {
@@ -169,7 +183,7 @@ func TestClient_Post(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	var result map[string]string
 	err := c.Post("/resource", map[string]string{"name": "new"}, &result)
 	if err != nil {
@@ -192,7 +206,7 @@ func TestClient_Put(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	var result map[string]string
 	err := c.Put("/resource/1", map[string]string{"name": "updated"}, &result)
 	if err != nil {
@@ -212,7 +226,7 @@ func TestClient_Delete(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	err := c.Delete("/resource/1", nil)
 	if err != nil {
 		t.Fatalf("Delete() error: %v", err)
@@ -239,7 +253,7 @@ func TestClient_Do_RetriesOnTimeout(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	// Use a short timeout so the test is fast.
 	c.HTTPClient.Timeout = 500 * time.Millisecond
 
@@ -272,7 +286,7 @@ func TestClient_Do_RetriesOn502(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	data, code, err := c.Do(http.MethodGet, "/test", nil, nil)
 	if err != nil {
 		t.Fatalf("Do() error: %v", err)
@@ -297,7 +311,7 @@ func TestClient_Do_NoRetryOnPost(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	_, _, err := c.Do(http.MethodPost, "/test", map[string]string{"k": "v"}, nil)
 	if err == nil {
 		t.Fatal("expected error for 502 on POST")
@@ -316,7 +330,7 @@ func TestClient_Do_NoRetryOn4xx(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	_, _, err := c.Do(http.MethodGet, "/test", nil, nil)
 	if err == nil {
 		t.Fatal("expected error for 404")
@@ -335,7 +349,7 @@ func TestClient_Do_ExhaustsRetries(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "tok", false)
+	c := NewClient(srv.URL, "tok", "dev", false)
 	_, _, err := c.Do(http.MethodGet, "/test", nil, nil)
 	if err == nil {
 		t.Fatal("expected error after exhausting retries")
@@ -386,6 +400,64 @@ func TestIsRetryableStatus(t *testing.T) {
 	}
 }
 
+func TestClient_Do_ReadsAPIVersionHeader(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Stompy-API-Version", "6.0.0")
+		w.Header().Set("X-Stompy-Min-CLI-Version", "0.1.4")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", "0.2.0", false)
+	_, _, err := c.Do(http.MethodGet, "/test", nil, nil)
+	if err != nil {
+		t.Fatalf("Do() error: %v", err)
+	}
+	if c.APIVersion != "6.0.0" {
+		t.Errorf("APIVersion = %q, want %q", c.APIVersion, "6.0.0")
+	}
+}
+
+func TestClient_Do_CompatWarningPrintedOnce(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Stompy-Min-CLI-Version", "99.0.0")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", "0.2.0", false)
+
+	// First call should set compatWarned
+	_, _, _ = c.Do(http.MethodGet, "/test", nil, nil)
+	if !c.compatWarned {
+		t.Error("compatWarned should be true after outdated version response")
+	}
+
+	// Second call should not warn again (flag already set)
+	prevWarned := c.compatWarned
+	_, _, _ = c.Do(http.MethodGet, "/test", nil, nil)
+	if c.compatWarned != prevWarned {
+		t.Error("compatWarned should remain true (no double warning)")
+	}
+}
+
+func TestClient_Do_NoWarningWhenCompatible(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Stompy-Min-CLI-Version", "0.1.0")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", "0.2.0", false)
+	_, _, _ = c.Do(http.MethodGet, "/test", nil, nil)
+	if c.compatWarned {
+		t.Error("compatWarned should be false when CLI version is compatible")
+	}
+}
+
 func TestClient_Do_NoContentType_ForGetRequests(t *testing.T) {
 	var gotContentType string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -395,7 +467,7 @@ func TestClient_Do_NoContentType_ForGetRequests(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := NewClient(srv.URL, "", false)
+	c := NewClient(srv.URL, "", "dev", false)
 	_, _, err := c.Do(http.MethodGet, "/test", nil, nil)
 	if err != nil {
 		t.Fatalf("Do() error: %v", err)
