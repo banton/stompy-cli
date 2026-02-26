@@ -127,6 +127,11 @@ var contextListCmd = &cobra.Command{
 		tags, _ := cmd.Flags().GetString("tags")
 		limit, _ := cmd.Flags().GetInt("limit")
 		offset, _ := cmd.Flags().GetInt("offset")
+		fresh, _ := cmd.Flags().GetBool("fresh")
+
+		if fresh {
+			apiClient.NoCache = true
+		}
 
 		resp, err := apiClient.ListContexts(project, priority, tags, limit, offset)
 		if err != nil {
@@ -274,6 +279,7 @@ func init() {
 	contextListCmd.Flags().String("tags", "", "Filter by tags")
 	contextListCmd.Flags().Int("limit", 0, "Limit results")
 	contextListCmd.Flags().Int("offset", 0, "Offset for pagination")
+	contextListCmd.Flags().Bool("fresh", false, "Bypass server cache for fresh results")
 
 	contextSearchCmd.Flags().Int("limit", 0, "Limit results")
 

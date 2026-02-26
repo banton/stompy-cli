@@ -476,3 +476,57 @@ func TestClient_Do_NoContentType_ForGetRequests(t *testing.T) {
 		t.Errorf("Content-Type for GET = %q, want empty", gotContentType)
 	}
 }
+
+func TestClient_Do_NoCacheSendsCacheControlHeader(t *testing.T) {
+	var gotCacheControl string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotCacheControl = r.Header.Get("Cache-Control")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", "dev", false)
+	c.NoCache = true
+	_, _, err := c.Do(http.MethodGet, "/test", nil, nil)
+	if err != nil {
+		t.Fatalf("Do() error: %v", err)
+	}
+	if gotCacheControl != "no-cache" {
+		t.Errorf("Cache-Control = %q, want %q", gotCacheControl, "no-cache")
+	}
+}
+
+func TestClient_Do_NoCacheResetAfterRequest(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", "dev", false)
+	c.NoCache = true
+	_, _, _ = c.Do(http.MethodGet, "/test", nil, nil)
+	if c.NoCache {
+		t.Error("NoCache should be reset to false after Do()")
+	}
+}
+
+func TestClient_Do_NoCacheNotSetByDefault(t *testing.T) {
+	var gotCacheControl string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotCacheControl = r.Header.Get("Cache-Control")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient(srv.URL, "tok", "dev", false)
+	_, _, err := c.Do(http.MethodGet, "/test", nil, nil)
+	if err != nil {
+		t.Fatalf("Do() error: %v", err)
+	}
+	if gotCacheControl != "" {
+		t.Errorf("Cache-Control = %q, want empty (no-cache not set)", gotCacheControl)
+	}
+}

@@ -24,6 +24,7 @@ type Client struct {
 	Version    string // CLI version (e.g., "0.2.0" or "dev")
 	HTTPClient *http.Client
 	Verbose    bool
+	NoCache    bool // When true, sends Cache-Control: no-cache (consumed after each Do call)
 
 	// Server version info (populated from response headers)
 	APIVersion   string // X-Stompy-API-Version
@@ -103,6 +104,10 @@ func (c *Client) Do(method, path string, body any, params url.Values) ([]byte, i
 		}
 		req.Header.Set("User-Agent", c.UserAgent)
 
+		if c.NoCache {
+			req.Header.Set("Cache-Control", "no-cache")
+		}
+
 		if body != nil && (method == http.MethodPost || method == http.MethodPut) {
 			req.Header.Set("Content-Type", "application/json")
 		}
@@ -125,8 +130,14 @@ func (c *Client) Do(method, path string, body any, params url.Values) ([]byte, i
 			return nil, resp.StatusCode, fmt.Errorf("reading response body: %w", err)
 		}
 
+		// Reset NoCache after each successful response
+		c.NoCache = false
+
 		if c.Verbose {
 			fmt.Fprintf(os.Stderr, "[DEBUG] <-- %d %s (%s, %d bytes)\n", resp.StatusCode, http.StatusText(resp.StatusCode), elapsed, len(respBody))
+			if xCache := resp.Header.Get("X-Cache"); xCache != "" {
+				fmt.Fprintf(os.Stderr, "[DEBUG]     X-Cache: %s\n", xCache)
+			}
 			if len(respBody) > 0 {
 				preview := string(respBody)
 				if len(preview) > 300 {
