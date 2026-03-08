@@ -11,6 +11,39 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// parseTopicRef parses a deeplink topic reference into project, topic, and version components.
+// Supported formats:
+//
+//	"project/topic"        → project="project", topic="topic", version=""
+//	"_global/topic"        → project="_global", topic="topic", version=""
+//	"project/topic@v1.0"   → project="project", topic="topic", version="v1.0"
+//	"plain_topic"          → project=projectFlag, topic="plain_topic", version=""
+//	"plain_topic@v2"       → project=projectFlag, topic="plain_topic", version="v2"
+//
+// If a deeplink project is extracted AND projectFlag is non-empty, the deeplink project wins
+// and a warning is printed.
+func parseTopicRef(ref, projectFlag string) (project, topic, version string) {
+	// Split off version suffix (@version)
+	base := ref
+	if idx := strings.LastIndex(ref, "@"); idx != -1 {
+		version = ref[idx+1:]
+		base = ref[:idx]
+	}
+
+	// Check for project/topic deeplink syntax
+	if idx := strings.Index(base, "/"); idx != -1 {
+		dlProject := base[:idx]
+		dlTopic := base[idx+1:]
+		if projectFlag != "" && projectFlag != dlProject {
+			fmt.Fprintf(os.Stderr, "warning: deeplink project %q overrides --project %q\n", dlProject, projectFlag)
+		}
+		return dlProject, dlTopic, version
+	}
+
+	// Plain topic — use projectFlag as-is
+	return projectFlag, base, version
+}
+
 var contextCmd = &cobra.Command{
 	Use:   "context",
 	Short: "Manage contexts (persistent memory)",
@@ -19,12 +52,19 @@ var contextCmd = &cobra.Command{
 var contextLockCmd = &cobra.Command{
 	Use:   "lock <topic>",
 	Short: "Lock (create) a context",
-	Args:  cobra.ExactArgs(1),
+	Long: `Lock (create or update) a context. Accepts deeplink syntax:
+
+  stompy context lock project/topic --content "..."
+  stompy context lock _global/topic --content "..."
+  stompy context lock plain-topic --content "..."`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		project, err := getProject()
+		projectFlag, err := getProject()
 		if err != nil {
 			return err
 		}
+
+		project, topic, _ := parseTopicRef(args[0], projectFlag)
 
 		content, err := resolveContent(cmd)
 		if err != nil {
@@ -36,7 +76,7 @@ var contextLockCmd = &cobra.Command{
 		force, _ := cmd.Flags().GetBool("force")
 
 		req := api.ContextCreateRequest{
-			Topic:      args[0],
+			Topic:      topic,
 			Content:    content,
 			Tags:       tags,
 			Priority:   priority,
@@ -56,16 +96,29 @@ var contextLockCmd = &cobra.Command{
 var contextRecallCmd = &cobra.Command{
 	Use:   "recall <topic>",
 	Short: "Recall (read) a context",
-	Args:  cobra.ExactArgs(1),
+	Long: `Recall (read) a context. Accepts deeplink syntax:
+
+  stompy context recall project/topic
+  stompy context recall _global/topic
+  stompy context recall project/topic@v1.0
+  stompy context recall plain-topic@v2`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		project, err := getProject()
+		projectFlag, err := getProject()
 		if err != nil {
 			return err
 		}
 
-		version, _ := cmd.Flags().GetString("version")
+		versionFlag, _ := cmd.Flags().GetString("version")
+		project, topic, versionRef := parseTopicRef(args[0], projectFlag)
 
-		resp, err := apiClient.GetContext(project, args[0], version)
+		// --version flag takes precedence over @version suffix in deeplink
+		version := versionFlag
+		if version == "" {
+			version = versionRef
+		}
+
+		resp, err := apiClient.GetContext(project, topic, version)
 		if err != nil {
 			return err
 		}
@@ -89,18 +142,24 @@ var contextRecallCmd = &cobra.Command{
 var contextUnlockCmd = &cobra.Command{
 	Use:   "unlock <topic>",
 	Short: "Unlock (delete) a context",
-	Args:  cobra.ExactArgs(1),
+	Long: `Unlock (delete) a context. Accepts deeplink syntax:
+
+  stompy context unlock project/topic
+  stompy context unlock _global/topic`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		project, err := getProject()
+		projectFlag, err := getProject()
 		if err != nil {
 			return err
 		}
+
+		project, topic, _ := parseTopicRef(args[0], projectFlag)
 
 		version, _ := cmd.Flags().GetString("version")
 		force, _ := cmd.Flags().GetBool("force")
 		noArchive, _ := cmd.Flags().GetBool("no-archive")
 
-		resp, err := apiClient.UnlockContext(project, args[0], version, force, noArchive)
+		resp, err := apiClient.UnlockContext(project, topic, version, force, noArchive)
 		if err != nil {
 			return err
 		}
@@ -207,12 +266,18 @@ var contextSearchCmd = &cobra.Command{
 var contextUpdateCmd = &cobra.Command{
 	Use:   "update <topic>",
 	Short: "Update a context",
-	Args:  cobra.ExactArgs(1),
+	Long: `Update a context. Accepts deeplink syntax:
+
+  stompy context update project/topic --content "..."
+  stompy context update _global/topic --content "..."`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		project, err := getProject()
+		projectFlag, err := getProject()
 		if err != nil {
 			return err
 		}
+
+		project, topic, _ := parseTopicRef(args[0], projectFlag)
 
 		content, err := resolveContent(cmd)
 		if err != nil {
@@ -228,7 +293,7 @@ var contextUpdateCmd = &cobra.Command{
 			Tags:     tags,
 		}
 
-		resp, err := apiClient.UpdateContext(project, args[0], req)
+		resp, err := apiClient.UpdateContext(project, topic, req)
 		if err != nil {
 			return err
 		}
@@ -241,19 +306,25 @@ var contextUpdateCmd = &cobra.Command{
 var contextMoveCmd = &cobra.Command{
 	Use:   "move <topic>",
 	Short: "Move a context to another project",
-	Args:  cobra.ExactArgs(1),
+	Long: `Move a context to another project. Accepts deeplink syntax:
+
+  stompy context move project/topic --to other-project
+  stompy context move _global/topic --to my-project`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		project, err := getProject()
+		projectFlag, err := getProject()
 		if err != nil {
 			return err
 		}
+
+		project, topic, _ := parseTopicRef(args[0], projectFlag)
 
 		target, _ := cmd.Flags().GetString("to")
 		if target == "" {
 			return fmt.Errorf("--to flag is required")
 		}
 
-		resp, err := apiClient.MoveContext(project, args[0], target)
+		resp, err := apiClient.MoveContext(project, topic, target)
 		if err != nil {
 			return err
 		}
