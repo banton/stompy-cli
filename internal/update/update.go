@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -51,7 +52,7 @@ func CheckForUpdate(currentVersion, configDir string) string {
 
 	cache := loadCache(configDir)
 	if cache != nil && time.Since(cache.LastCheck) < checkInterval {
-		if cache.LatestVersion != "" && !versionsEqual(cache.LatestVersion, currentVersion) {
+		if cache.LatestVersion != "" && isNewer(cache.LatestVersion, currentVersion) {
 			return cache.LatestVersion
 		}
 		return ""
@@ -81,7 +82,7 @@ func CheckForUpdate(currentVersion, configDir string) string {
 		ReleaseURL:    release.HTMLURL,
 	})
 
-	if !versionsEqual(release.TagName, currentVersion) {
+	if isNewer(release.TagName, currentVersion) {
 		return release.TagName
 	}
 	return ""
@@ -90,6 +91,51 @@ func CheckForUpdate(currentVersion, configDir string) string {
 // versionsEqual compares versions ignoring the "v" prefix.
 func versionsEqual(a, b string) bool {
 	return strings.TrimPrefix(a, "v") == strings.TrimPrefix(b, "v")
+}
+
+// isNewer returns true if candidate is strictly newer than current (semver comparison).
+func isNewer(candidate, current string) bool {
+	cParts, cOk := parseSemver(candidate)
+	curParts, curOk := parseSemver(current)
+	if !cOk || !curOk {
+		// Fall back to string inequality if we can't parse
+		return !versionsEqual(candidate, current)
+	}
+	return compareSemver(cParts, curParts) > 0
+}
+
+// parseSemver extracts [major, minor, patch] from a version string.
+func parseSemver(v string) ([3]int, bool) {
+	v = strings.TrimPrefix(v, "v")
+	parts := strings.SplitN(v, ".", 3)
+	if len(parts) != 3 {
+		return [3]int{}, false
+	}
+	var result [3]int
+	for i, p := range parts {
+		if idx := strings.IndexAny(p, "-+"); idx >= 0 {
+			p = p[:idx]
+		}
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return [3]int{}, false
+		}
+		result[i] = n
+	}
+	return result, true
+}
+
+// compareSemver returns -1 if a < b, 0 if equal, 1 if a > b.
+func compareSemver(a, b [3]int) int {
+	for i := 0; i < 3; i++ {
+		if a[i] < b[i] {
+			return -1
+		}
+		if a[i] > b[i] {
+			return 1
+		}
+	}
+	return 0
 }
 
 // GetLatestRelease fetches the latest release info from GitHub.

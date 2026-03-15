@@ -69,6 +69,45 @@ func TestCheckForUpdate_CachedSameVersionNoPrefix(t *testing.T) {
 	}
 }
 
+func TestCheckForUpdate_CachedOlderVersion(t *testing.T) {
+	dir := t.TempDir()
+
+	// Cache has an older version than current — should NOT suggest downgrade
+	cache := VersionCache{
+		LastCheck:     time.Now(),
+		LatestVersion: "v0.1.5",
+	}
+	data, _ := json.Marshal(cache)
+	os.WriteFile(filepath.Join(dir, cacheFileName), data, 0644)
+
+	result := CheckForUpdate("v0.2.0", dir)
+	if result != "" {
+		t.Errorf("CheckForUpdate with older cached version = %q, want empty (no downgrade)", result)
+	}
+}
+
+func TestIsNewer(t *testing.T) {
+	tests := []struct {
+		candidate string
+		current   string
+		want      bool
+	}{
+		{"v0.2.0", "v0.1.5", true},
+		{"v0.1.5", "v0.2.0", false},
+		{"v0.2.0", "v0.2.0", false},
+		{"v1.0.0", "v0.9.9", true},
+		{"v0.2.1", "v0.2.0", true},
+		{"0.2.0", "0.1.0", true},
+		{"v0.2.0", "0.2.0", false}, // same version, different prefix
+	}
+	for _, tt := range tests {
+		got := isNewer(tt.candidate, tt.current)
+		if got != tt.want {
+			t.Errorf("isNewer(%q, %q) = %v, want %v", tt.candidate, tt.current, got, tt.want)
+		}
+	}
+}
+
 func TestFindAsset(t *testing.T) {
 	assets := []Asset{
 		{Name: "stompy_v0.2.0_darwin_arm64.tar.gz", BrowserDownloadURL: "https://example.com/darwin_arm64.tar.gz"},
