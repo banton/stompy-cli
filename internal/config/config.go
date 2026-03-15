@@ -15,6 +15,7 @@ const (
 	configFileType = "yaml"
 
 	defaultAPIURL       = "https://api.stompy.ai/api/v1"
+	stagingAPIURL       = "https://api-staging.stompy.ai/api/v1"
 	defaultOutputFormat = "table"
 )
 
@@ -66,6 +67,11 @@ func Save() error {
 // GetAPIURL returns the configured API URL.
 func GetAPIURL() string {
 	return viper.GetString("api_url")
+}
+
+// GetStagingAPIURL returns the staging API URL.
+func GetStagingAPIURL() string {
+	return stagingAPIURL
 }
 
 // GetAPIKey returns the configured API key.

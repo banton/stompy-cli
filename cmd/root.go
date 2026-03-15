@@ -15,11 +15,12 @@ import (
 )
 
 var (
-	flagAPIURL  string
-	flagAPIKey  string
-	flagProject string
-	flagOutput  string
-	flagVerbose bool
+	flagAPIURL     string
+	flagAPIKey     string
+	flagProject    string
+	flagOutput     string
+	flagVerbose    bool
+	flagUseStaging bool
 
 	apiClient        *api.Client
 	updateAvailable  = make(chan string, 1)
@@ -72,7 +73,11 @@ var rootCmd = &cobra.Command{
 
 		apiURL := flagAPIURL
 		if apiURL == "" {
-			apiURL = config.GetAPIURL()
+			if flagUseStaging {
+				apiURL = config.GetStagingAPIURL()
+			} else {
+				apiURL = config.GetAPIURL()
+			}
 		}
 
 		apiClient = api.NewClient(apiURL, token, Version, flagVerbose)
@@ -86,6 +91,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&flagProject, "project", "p", "", "Override default project")
 	rootCmd.PersistentFlags().StringVarP(&flagOutput, "output", "o", "", "Output format: table, json, yaml")
 	rootCmd.PersistentFlags().BoolVar(&flagVerbose, "verbose", false, "Debug HTTP logging")
+	rootCmd.PersistentFlags().BoolVar(&flagUseStaging, "use-staging", false, "")
+	rootCmd.PersistentFlags().MarkHidden("use-staging")
 }
 
 // Execute is the main entry point for the CLI.
@@ -137,7 +144,11 @@ func resolveAuthToken() (string, error) {
 		if refreshToken != "" {
 			apiURL := flagAPIURL
 			if apiURL == "" {
-				apiURL = config.GetAPIURL()
+				if flagUseStaging {
+					apiURL = config.GetStagingAPIURL()
+				} else {
+					apiURL = config.GetAPIURL()
+				}
 			}
 			tokenResp, err := auth.RefreshToken(apiURL, refreshToken)
 			if err == nil {
