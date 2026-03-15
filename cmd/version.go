@@ -24,7 +24,11 @@ var versionCmd = &cobra.Command{
 		// Try to fetch API version from server
 		apiURL := flagAPIURL
 		if apiURL == "" {
-			apiURL = config.GetAPIURL()
+			if flagUseStaging {
+				apiURL = config.GetStagingAPIURL()
+			} else {
+				apiURL = config.GetAPIURL()
+			}
 		}
 		if apiURL != "" {
 			c := api.NewClient(apiURL, "", Version, false)
