@@ -156,17 +156,88 @@ var projectUseCmd = &cobra.Command{
 	},
 }
 
+// ProjectBriefResponse is the MCP project_brief tool response.
+type ProjectBriefResponse struct {
+	Project      string `json:"project"`
+	Summary      string `json:"summary"`
+	ContextCount int    `json:"context_count"`
+	TopTopics    []struct {
+		Topic    string `json:"topic"`
+		Priority string `json:"priority"`
+	} `json:"top_topics,omitempty"`
+	GeneratedAt string `json:"generated_at,omitempty"`
+	Cached      bool   `json:"cached,omitempty"`
+}
+
+var projectBriefCmd = &cobra.Command{
+	Use:   "brief [name]",
+	Short: "Show LLM-synthesized project overview",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		project := ""
+		if len(args) > 0 {
+			project = args[0]
+		} else {
+			var err error
+			project, err = getProject()
+			if err != nil {
+				return err
+			}
+		}
+
+		refresh, _ := cmd.Flags().GetBool("refresh")
+		mcpArgs := map[string]any{"project": project}
+		if refresh {
+			mcpArgs["refresh"] = true
+		}
+
+		var resp ProjectBriefResponse
+		if err := mcpClient.CallToolTyped("project_brief", mcpArgs, &resp); err != nil {
+			return err
+		}
+
+		f := getFormatter()
+		fields := []output.KeyValue{
+			{Key: "Project", Value: resp.Project},
+			{Key: "Contexts", Value: fmt.Sprintf("%d", resp.ContextCount)},
+		}
+		if resp.GeneratedAt != "" {
+			fields = append(fields, output.KeyValue{Key: "Generated", Value: resp.GeneratedAt})
+		}
+		if resp.Cached {
+			fields = append(fields, output.KeyValue{Key: "Source", Value: "cached"})
+		}
+		fields = append(fields, output.KeyValue{Key: "Summary", Value: resp.Summary})
+
+		if len(resp.TopTopics) > 0 && isTableOutput() {
+			fmt.Print(f.FormatSingle(fields))
+			fmt.Println()
+			headers := []string{"TOPIC", "PRIORITY"}
+			var rows [][]string
+			for _, t := range resp.TopTopics {
+				rows = append(rows, []string{t.Topic, t.Priority})
+			}
+			fmt.Print(f.FormatTable(headers, rows))
+		} else {
+			fmt.Print(f.FormatSingle(fields))
+		}
+		return nil
+	},
+}
+
 func init() {
 	projectCreateCmd.Flags().String("description", "", "Project description")
 	projectListCmd.Flags().Bool("stats", false, "Include project statistics")
 	projectInfoCmd.Flags().Bool("stats", false, "Include project statistics")
 	projectDeleteCmd.Flags().Bool("confirm", false, "Confirm deletion (required)")
+	projectBriefCmd.Flags().Bool("refresh", false, "Force regeneration of the brief")
 
 	projectCmd.AddCommand(projectCreateCmd)
 	projectCmd.AddCommand(projectListCmd)
 	projectCmd.AddCommand(projectInfoCmd)
 	projectCmd.AddCommand(projectDeleteCmd)
 	projectCmd.AddCommand(projectUseCmd)
+	projectCmd.AddCommand(projectBriefCmd)
 	rootCmd.AddCommand(projectCmd)
 }
 

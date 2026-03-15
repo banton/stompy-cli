@@ -23,6 +23,7 @@ var (
 	flagUseStaging bool
 
 	apiClient        *api.Client
+	mcpClient        *api.MCPClient
 	updateAvailable  = make(chan string, 1)
 )
 
@@ -81,6 +82,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		apiClient = api.NewClient(apiURL, token, Version, flagVerbose)
+		mcpClient = api.NewMCPClient(api.MCPBaseURL(apiURL), token, Version, flagVerbose)
 		return nil
 	},
 }

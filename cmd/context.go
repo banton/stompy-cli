@@ -334,6 +334,208 @@ var contextMoveCmd = &cobra.Command{
 	},
 }
 
+// ContextExploreResponse is the MCP context_explore tool response.
+type ContextExploreResponse struct {
+	Project  string `json:"project"`
+	Contexts []struct {
+		Topic       string `json:"topic"`
+		Priority    string `json:"priority"`
+		Version     string `json:"version"`
+		Tags        string `json:"tags,omitempty"`
+		Preview     string `json:"preview,omitempty"`
+		AccessCount int    `json:"access_count"`
+	} `json:"contexts"`
+	Total int `json:"total"`
+}
+
+var contextExploreCmd = &cobra.Command{
+	Use:   "explore",
+	Short: "Browse contexts by priority with tree view",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		project, err := getProject()
+		if err != nil {
+			return err
+		}
+
+		grep, _ := cmd.Flags().GetString("grep")
+		verbose, _ := cmd.Flags().GetBool("verbose")
+
+		mcpArgs := map[string]any{"project": project}
+		if grep != "" {
+			mcpArgs["grep"] = grep
+		}
+		if verbose {
+			mcpArgs["verbose"] = true
+		}
+
+		var resp ContextExploreResponse
+		if err := mcpClient.CallToolTyped("context_explore", mcpArgs, &resp); err != nil {
+			return err
+		}
+
+		f := getFormatter()
+		headers := []string{"TOPIC", "PRIORITY", "VERSION", "TAGS", "ACCESSES"}
+		if verbose {
+			headers = append(headers, "PREVIEW")
+		}
+
+		var rows [][]string
+		for _, c := range resp.Contexts {
+			row := []string{
+				c.Topic,
+				c.Priority,
+				c.Version,
+				c.Tags,
+				fmt.Sprintf("%d", c.AccessCount),
+			}
+			if verbose {
+				preview := c.Preview
+				if len(preview) > 50 {
+					preview = preview[:47] + "..."
+				}
+				row = append(row, preview)
+			}
+			rows = append(rows, row)
+		}
+
+		fmt.Print(f.FormatTable(headers, rows))
+		if isTableOutput() {
+			fmt.Printf("\nTotal: %d contexts in %s\n", resp.Total, resp.Project)
+		}
+		return nil
+	},
+}
+
+// ContextDashboardResponse is the MCP context_dashboard tool response.
+type ContextDashboardResponse struct {
+	Project       string `json:"project"`
+	TotalContexts int    `json:"total_contexts"`
+	ByPriority    map[string]int `json:"by_priority"`
+	RecentTopics  []string       `json:"recent_topics,omitempty"`
+	StaleCount    int            `json:"stale_count"`
+}
+
+var contextDashboardCmd = &cobra.Command{
+	Use:   "dashboard",
+	Short: "Show context statistics and health",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		project, err := getProject()
+		if err != nil {
+			return err
+		}
+
+		detail, _ := cmd.Flags().GetString("detail")
+		mcpArgs := map[string]any{"project": project}
+		if detail != "" {
+			mcpArgs["detail"] = detail
+		}
+
+		var resp ContextDashboardResponse
+		if err := mcpClient.CallToolTyped("context_dashboard", mcpArgs, &resp); err != nil {
+			return err
+		}
+
+		f := getFormatter()
+		fields := []output.KeyValue{
+			{Key: "Project", Value: resp.Project},
+			{Key: "Total Contexts", Value: fmt.Sprintf("%d", resp.TotalContexts)},
+			{Key: "Stale Contexts", Value: fmt.Sprintf("%d", resp.StaleCount)},
+		}
+
+		// Priority breakdown
+		for _, p := range []string{"always_check", "important", "reference", "nice_to_have"} {
+			if count, ok := resp.ByPriority[p]; ok {
+				fields = append(fields, output.KeyValue{Key: fmt.Sprintf("  %s", p), Value: fmt.Sprintf("%d", count)})
+			}
+		}
+
+		if len(resp.RecentTopics) > 0 {
+			fields = append(fields, output.KeyValue{Key: "Recent Topics", Value: strings.Join(resp.RecentTopics, ", ")})
+		}
+
+		fmt.Print(f.FormatSingle(fields))
+		return nil
+	},
+}
+
+// RecallBatchResponse is the MCP recall_batch tool response.
+type RecallBatchResponse struct {
+	Results []struct {
+		Topic   string `json:"topic"`
+		Content string `json:"content,omitempty"`
+		Preview string `json:"preview,omitempty"`
+		Version string `json:"version,omitempty"`
+		Found   bool   `json:"found"`
+		Error   string `json:"error,omitempty"`
+	} `json:"results"`
+}
+
+var contextBatchCmd = &cobra.Command{
+	Use:   "batch <topic1> <topic2> ...",
+	Short: "Fetch multiple contexts in one call",
+	Args:  cobra.MinimumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		project, err := getProject()
+		if err != nil {
+			return err
+		}
+
+		preview, _ := cmd.Flags().GetBool("preview")
+		mcpArgs := map[string]any{
+			"project": project,
+			"topics":  args,
+		}
+		if preview {
+			mcpArgs["preview_only"] = true
+		}
+
+		var resp RecallBatchResponse
+		if err := mcpClient.CallToolTyped("recall_batch", mcpArgs, &resp); err != nil {
+			return err
+		}
+
+		f := getFormatter()
+
+		if preview {
+			headers := []string{"TOPIC", "FOUND", "VERSION", "PREVIEW"}
+			var rows [][]string
+			for _, r := range resp.Results {
+				found := "no"
+				if r.Found {
+					found = "yes"
+				}
+				p := r.Preview
+				if len(p) > 60 {
+					p = p[:57] + "..."
+				}
+				rows = append(rows, []string{r.Topic, found, r.Version, p})
+			}
+			fmt.Print(f.FormatTable(headers, rows))
+		} else {
+			for i, r := range resp.Results {
+				if i > 0 && isTableOutput() {
+					fmt.Println(strings.Repeat("─", 40))
+				}
+				if !r.Found {
+					fmt.Printf("%s %s: not found", output.Warn("!"), r.Topic)
+					if r.Error != "" {
+						fmt.Printf(" (%s)", r.Error)
+					}
+					fmt.Println()
+					continue
+				}
+				fields := []output.KeyValue{
+					{Key: "Topic", Value: r.Topic},
+					{Key: "Version", Value: r.Version},
+					{Key: "Content", Value: r.Content},
+				}
+				fmt.Print(f.FormatSingle(fields))
+			}
+		}
+		return nil
+	},
+}
+
 func init() {
 	contextLockCmd.Flags().String("content", "", "Context content (use @file to read from file)")
 	contextLockCmd.Flags().String("tags", "", "Comma-separated tags")
@@ -360,6 +562,13 @@ func init() {
 
 	contextMoveCmd.Flags().String("to", "", "Target project name (required)")
 
+	contextExploreCmd.Flags().String("grep", "", "Filter by topic glob pattern")
+	contextExploreCmd.Flags().Bool("verbose", false, "Include content previews")
+
+	contextDashboardCmd.Flags().String("detail", "", "Detail level: summary, verbose")
+
+	contextBatchCmd.Flags().Bool("preview", false, "Preview-only mode (no full content)")
+
 	contextCmd.AddCommand(contextLockCmd)
 	contextCmd.AddCommand(contextRecallCmd)
 	contextCmd.AddCommand(contextUnlockCmd)
@@ -367,6 +576,9 @@ func init() {
 	contextCmd.AddCommand(contextSearchCmd)
 	contextCmd.AddCommand(contextUpdateCmd)
 	contextCmd.AddCommand(contextMoveCmd)
+	contextCmd.AddCommand(contextExploreCmd)
+	contextCmd.AddCommand(contextDashboardCmd)
+	contextCmd.AddCommand(contextBatchCmd)
 	rootCmd.AddCommand(contextCmd)
 }
 
